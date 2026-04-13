@@ -1,0 +1,156 @@
+% ==============================================================================
+% tabletop.tex — UE SIS589
+% Guide de l'Animateur — Exercice Tabletop Ransomware LiZbiZ-SIS
+% ==============================================================================
+
+\chapter*{Guide de l'Animateur~— Tabletop Ransomware}
+\addcontentsline{toc}{chapter}{Guide de l'Animateur: Tabletop}
+\label{ann:tabletop}
+
+\begin{boxinfo}
+\textbf{Document réservé à l'enseignant.} Ce guide est distribué uniquement
+à l'animateur du Tabletop. Il ne doit pas être communiqué aux équipes avant
+la clôture de l'exercice.
+\end{boxinfo}
+
+% ==============================================================================
+\section*{Objectifs pédagogiques de l'exercice}
+% ==============================================================================
+
+Cet exercice Tabletop teste la capacité des équipes à~:
+\begin{itemize}
+  \item Prendre des décisions sous pression et incertitude.
+  \item Appliquer le cycle ISO~27035 sans assistance documentaire.
+  \item Articuler les dimensions technique, légale et managériale
+        d'une crise cyber.
+  \item Communiquer de manière adaptée à différentes audiences.
+  \item Identifier spontanément les lacunes de préparation.
+\end{itemize}
+
+% ==============================================================================
+\section*{Chronologie des injects}
+% ==============================================================================
+
+\begin{table}[H]
+\centering\small
+\caption{Planning des injects — exercice de 4~heures}
+\label{tab:tabletop-planning}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{2cm}p{3cm}p{8.5cm}}
+\toprule
+\tableauHeader{Heure} & \tableauHeader{Événement} &
+\tableauHeader{Objectif pédagogique} \\
+\midrule
+T+0   & Scénario initial & Triage, qualification, premières décisions \\
+T+15  & Inject~1 (RDP + exfil) & Révision de l'évaluation, vecteur initial \\
+T+30  & Bilan Phase~1 & Vérifier que les équipes ont activé l'astreinte \\
+T+35  & Inject~2 (ransomware confirmé) & Confinement, mapping MITRE, comm DG \\
+T+75  & Inject~3 (backups chiffrés + MoMo) & Escalade légale, décision restauration \\
+T+90  & Bilan Phase~2 & Vérifier cohérence des décisions \\
+T+120 & Phase~3 (éradication) & Ordonnancement des actions \\
+T+150 & Début RETEX & Réflexivité, auto-évaluation \\
+T+180 & Présentations orales & Communication, maîtrise du sujet \\
+T+210 & Débriefing animateur & Retour sur les décisions clés \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+\section*{Éléments de réponse attendus}
+% ==============================================================================
+
+\subsection*{Phase~1 — Décisions attendues}
+
+\textbf{Classification correcte~:} Gravité \gravite{critique}
+(données clients, service de paiement, propagation probable).
+Activation immédiate~: RSSI (même en déplacement), Incident Manager,
+analyste N2.
+
+\textbf{5~premières actions (ordre attendu)~:}
+\begin{enumerate}
+  \item Capturer la mémoire de srv-erp-01 AVANT toute action (avml ou WinPmem).
+  \item Isoler srv-erp-01 du réseau (VLAN quarantaine, pas d'extinction).
+  \item Bloquer l'IP sortante 185.220.101.5 au firewall.
+  \item Désactiver le compte \texttt{administrator} sur srv-erp-01.
+  \item Notifier le RSSI et le DG.
+\end{enumerate}
+
+\textbf{Points de vigilance~:} Équipes qui éteignent srv-erp-01 immédiatement
+sans capturer la RAM~: pénalité pédagogique~; rappeler l'ordre de volatilité.
+Équipes qui ne pensent pas à isoler srv-backup-01~: rappeler la propagation SMB.
+
+\subsection*{Inject~1 — Réponse attendue}
+
+Le vecteur initial est l'accès RDP depuis 196.207.12.88 le 14~mai à 22h41
+(veille de l'incident). L'exfiltration vers 185.220.101.5 s'est faite
+pendant 7h34 avant le début du chiffrement.
+\textbf{TTPs attendus~:} T1133 (External Remote Services),
+T1078 (Valid Accounts), T1071.001 (Application Layer Protocol),
+T1048 (Exfiltration over Alternative Protocol).
+
+\subsection*{Phase~2 — Réponse à la recommandation de paiement}
+
+\textbf{Recommandation académique~: Ne pas payer.}
+Arguments~:
+\begin{enumerate}
+  \item Aucune garantie de déchiffrement~; 30\% des victimes qui paient
+        ne récupèrent pas leurs données.
+  \item Finance la criminalité et attire d'autres attaques.
+  \item Potentiellement illégal si le groupe est sanctionné (OFAC).
+  \item La clé de déchiffrement peut elle-même contenir un backdoor.
+  \item Une sauvegarde tape hors-site existe (inject~3).
+\end{enumerate}
+
+\subsection*{Inject~3 — Obligations légales}
+
+Les transactions MTN MoMo suspectes impliquent une obligation de
+notification à MTN, à l'ANTIC et potentiellement au BEAC
+(Banque des États de l'Afrique Centrale) selon les montants.
+La fuite de données clients déclenche les obligations de la Loi~2010/012.
+
+% ==============================================================================
+\section*{Grille d'observation de l'animateur}
+% ==============================================================================
+
+\begin{table}[H]
+\centering\small
+\caption{Grille d'observation — comportements à noter}
+\label{tab:tabletop-observation}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{6cm}p{3cm}p{3cm}p{1.8cm}}
+\toprule
+\tableauHeader{Comportement observé} & \tableauHeader{Moment} &
+\tableauHeader{Équipe} & \tableauHeader{Score} \\
+\midrule
+A capturé la RAM avant isolation & Phase~1 & & /2 \\
+A isolé correctement srv-erp-01 & Phase~1 & & /2 \\
+A pensé à srv-backup-01 spontanément & Phase~1 & & /1 \\
+Communication interne adaptée & Phase~1 & & /1 \\
+Mapping MITRE complet ($\geq 8$~TTPs) & Phase~2 & & /2 \\
+Recommandation paiement justifiée & Phase~2 & & /2 \\
+A identifié les obligations légales MoMo & Phase~2--3 & & /2 \\
+Plan d'éradication ordonné correctement & Phase~3 & & /2 \\
+RETEX sincère (lacunes reconnues) & RETEX & & /2 \\
+Présentation orale structurée & Oral & & /2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+\section*{Questions de débriefing (animateur)}
+% ==============================================================================
+
+\begin{enumerate}
+  \item \og{}Pourquoi n'avez-vous pas capturé la mémoire vive en premier~?\fg{}
+        (si non fait)
+  \item \og{}Quelle était votre source d'information principale pour prendre
+        la décision de confinement~? Était-elle suffisante~?\fg{}
+  \item \og{}Si vous aviez eu un playbook ransomware, qu'aurait-il contenu
+        que vous avez découvert en cours de simulation~?\fg{}
+  \item \og{}La communication vers le DG était-elle adaptée~?
+        Trop technique~? Trop floue~?\fg{}
+  \item \og{}Avez-vous pensé à la dimension légale (ANTIC, obligations
+        de notification) dès le départ ou seulement après l'inject~3~?\fg{}
+  \item \og{}Que feriez-vous différemment si cet incident se reproduisait
+        dans 6~mois~? Quels artefacts documentaires manquaient~?\fg{}
+\end{enumerate}

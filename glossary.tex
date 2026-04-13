@@ -1,0 +1,348 @@
+% ==============================================================================
+% annexes/glossary.tex — UE SIS589
+% Annexe B : Glossaire Bilingue FR/EN
+% ==============================================================================
+
+\chapter{Glossaire Bilingue Français~/ Anglais}
+\label{ann:glossary}
+
+\begin{boxinfo}
+Glossaire des termes techniques utilisés dans ce cours. La langue d'usage
+en cybersécurité opérationnelle étant souvent l'anglais, les termes
+anglophones sont systématiquement mentionnés. Un terme en italique indique
+un emprunt à l'anglais désormais d'usage courant dans la communauté
+francophone.
+\end{boxinfo}
+
+\renewcommand{\arraystretch}{1.25}
+
+% ─── A ────────────────────────────────────────────────────────────────────────
+\section*{A}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+Admissibilité & Admissibility &
+Qualité d'une preuve pouvant être présentée et acceptée par une juridiction. \\
+Agent (SIEM) & Agent &
+Processus léger installé sur un hôte pour collecter et transmettre les logs
+au serveur SIEM. \\
+Alerte & Alert &
+Notification générée par le SIEM lorsqu'une règle de corrélation est satisfaite. \\
+Artefact (forensique) & Artifact &
+Trace ou vestige numérique laissé par une activité système ou utilisateur,
+utilisable comme preuve. \\
+\textit{Assume breach} & Assume breach &
+Paradigme de sécurité postulant que l'attaquant est déjà présent dans le SI. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── B ────────────────────────────────────────────────────────────────────────
+\section*{B}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+\textit{Beacon} (C2) & Beacon &
+Communication périodique entre un implant et son infrastructure C2. \\
+Balisage & Timestamping &
+Apposition d'un horodatage fiable sur un document ou une preuve numérique. \\
+\textit{Baseline} & Baseline &
+État de référence (comportement normal) servant de base à la détection
+d'anomalies. \\
+Bloc non alloué & Unallocated block &
+Secteur disque non actuellement utilisé par le système de fichiers~;
+peut contenir des données antérieures récupérables. \\
+Bloqueur en écriture & Write blocker &
+Dispositif matériel ou logiciel empêchant toute écriture sur un support
+pendant son acquisition forensique. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── C ────────────────────────────────────────────────────────────────────────
+\section*{C}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+\textit{Carving} de fichiers & File carving &
+Récupération de fichiers supprimés par recherche de signatures dans l'espace
+non alloué, sans s'appuyer sur les métadonnées du système de fichiers. \\
+Chaîne de custody & Chain of custody &
+Traçabilité documentée de chaque accès à une pièce à conviction depuis
+sa collecte jusqu'à sa présentation en justice. \\
+Commande et Contrôle & Command and Control (C2) &
+Infrastructure utilisée par l'attaquant pour communiquer avec les implants
+déployés sur les systèmes compromis. \\
+Confinement & Containment &
+Mesures visant à limiter la propagation d'un incident sans altérer les preuves. \\
+Corrélation & Correlation &
+Processus SIEM d'analyse croisée d'événements hétérogènes pour identifier
+des patterns d'attaque. \\
+\textit{Cyber Threat Intelligence} & CTI &
+Renseignement actionnabel sur les menaces, produit à partir de l'analyse
+d'informations sur les adversaires. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── D ────────────────────────────────────────────────────────────────────────
+\section*{D}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+DKOM & Direct Kernel Object Manipulation &
+Technique de rootkit modifiant directement les structures du noyau
+pour dissimuler des processus. \\
+\textit{Dwell time} & Dwell time &
+Durée entre la compromission initiale d'un système et sa détection par
+les équipes de sécurité. \\
+Dump mémoire & Memory dump &
+Copie bit à bit du contenu de la mémoire vive d'un système à un instant~T. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── E ────────────────────────────────────────────────────────────────────────
+\section*{E}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+EDR & Endpoint Detection and Response &
+Agent hôte collectant la télémétrie comportementale et permettant la
+réponse distante~: isolation réseau, kill de processus. \\
+Éradication & Eradication &
+Phase de réponse aux incidents consistant à supprimer la cause racine~:
+malwares, persistances, comptes créés. \\
+\textit{Event ID} (EID) & Event ID &
+Identifiant numérique d'un type d'événement dans les journaux Windows. \\
+Exfiltration & Exfiltration &
+Transfert non autorisé de données depuis le système cible vers
+une infrastructure contrôlée par l'attaquant. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── F ────────────────────────────────────────────────────────────────────────
+\section*{F}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+Fatigue d'alerte & Alert fatigue &
+État d'épuisement des analystes SOC dû à un taux de faux positifs élevé,
+conduisant à ignorer les vraies menaces. \\
+FIM & File Integrity Monitoring &
+Surveillance continue des modifications apportées aux fichiers systèmes
+critiques~; détection d'altérations non autorisées. \\
+Forensique numérique & Digital forensics &
+Science d'identification, préservation, analyse et présentation des
+preuves numériques de manière légalement recevable. \\
+Faux positif & False positive (FP) &
+Alerte signalant une menace qui n'existe pas réellement. \\
+Faux négatif & False negative (FN) &
+Menace réelle non détectée par les outils de sécurité. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── H-I ──────────────────────────────────────────────────────────────────────
+\section*{H -- I}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+HIDS & Host-based IDS &
+Système de détection d'intrusion basé sur l'hôte~; analyse les activités
+locales (logs, fichiers, processus). \\
+Horodatage & Timestamp &
+Enregistrement de la date et heure d'un événement~; fondamental pour
+la reconstruction de timeline. \\
+Image disque & Disk image &
+Copie bit à bit d'un support de stockage~; inclut les secteurs libres
+et les données supprimées. \\
+Incident de sécurité & Security incident &
+Événement ou série d'événements confirmés portant atteinte à la CIA
+(\textit{Confidentiality, Integrity, Availability}) du SI. \\
+Indicateur de compromission & Indicator of compromise (IoC) &
+Artefact observable indiquant une compromission passée ou en cours~:
+hash, IP, domaine, chemin de fichier. \\
+Injection de processus & Process injection &
+Insertion de code malveillant dans l'espace d'adressage d'un processus
+légitime pour masquer son exécution. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── L-M ──────────────────────────────────────────────────────────────────────
+\section*{L -- M}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+\textit{Living off the Land} & LotL / LOLBins &
+Utilisation d'outils légitimes du système (powershell, certutil, wmic)
+à des fins malveillantes pour contourner les outils de détection. \\
+MACE & MACE (timestamps) &
+Acronyme des quatre horodatages NTFS~: Modified, Accessed, Created,
+Entry Modified. \\
+Malware sans fichier & Fileless malware &
+Code malveillant s'exécutant entièrement en mémoire, sans persistance
+sur disque~; invisible aux antivirus basés sur les signatures de fichiers. \\
+MFT & Master File Table &
+Structure centrale de NTFS contenant un enregistrement pour chaque fichier
+et répertoire du volume. \\
+MISP & Malware Information Sharing Platform &
+Plateforme open-source de partage et de gestion des indicateurs
+de compromission. \\
+MITRE ATT\&CK & MITRE ATT\&CK &
+Base de connaissance mondiale des TTPs d'adversaires réels,
+structurée en 14~tactiques et $>$200~techniques. \\
+MTTD & Mean Time To Detect &
+Durée moyenne entre la survenance d'un incident et sa détection. \\
+MTTR & Mean Time To Respond &
+Durée moyenne entre la détection d'un incident et les premières mesures
+de confinement. \\
+Mouvement latéral & Lateral movement &
+Déplacement de l'attaquant vers d'autres systèmes dans le réseau compromis
+après un accès initial. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── N-P ──────────────────────────────────────────────────────────────────────
+\section*{N -- P}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+Normalisation (logs) & Log normalization &
+Conversion des journaux hétérogènes dans un format commun (ECS, CEF)
+pour permettre la corrélation. \\
+Ordre de volatilité & Order of volatility &
+Hiérarchie de collecte des preuves en fonction de leur durée de vie~:
+RAM~$\to$~réseau~$\to$~disque~$\to$~archives. \\
+\textit{Parsing} & Parsing &
+Décomposition d'une ligne de log en champs structurés. \\
+Persistance & Persistence &
+Mécanisme permettant à un malware de survivre aux redémarrages~:
+Run keys, services, cron, authorized\_keys. \\
+Playbook & Playbook &
+Document décrivant la procédure logique de réponse à un type d'incident.
+Répond à~: \og{}Quoi faire~?\fg{} \\
+Preuve numérique & Digital evidence &
+Donnée électronique pouvant être présentée devant une juridiction comme
+élément de preuve. \\
+\textit{Process hollowing} & Process hollowing &
+Technique d'évasion~: processus légitime démarré en mode suspendu~;
+son code est remplacé par du code malveillant avant reprise. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── R-S ──────────────────────────────────────────────────────────────────────
+\section*{R -- S}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+Rançongiciel & Ransomware &
+Logiciel malveillant chiffrant les données de la victime et exigeant
+une rançon pour la clé de déchiffrement. \\
+Rétablissement & Recovery &
+Phase de réponse aux incidents consistant à restaurer les systèmes à
+leur état opérationnel normal. \\
+RETEX & Post-incident review &
+Retour d'expérience structuré après un incident pour identifier les causes
+profondes et améliorer le dispositif. \\
+Règle de corrélation & Correlation rule &
+Règle SIEM définissant la condition logique, la fenêtre temporelle et
+le seuil déclenchant une alerte. \\
+Runbook & Runbook &
+Document technique détaillant les commandes exactes à exécuter lors d'une
+réponse à incident. Répond à~: \og{}Comment faire~?\fg{} \\
+SIEM & Security Information and Event Management &
+Plateforme centralisant la collecte, la normalisation, la corrélation
+et l'alerting des événements de sécurité. \\
+\textit{Slack space} & Slack space &
+Espace résiduel entre la fin d'un fichier et la fin de son cluster~;
+peut contenir des fragments de données antérieures. \\
+SOC & Security Operations Center &
+Structure organisationnelle dédiée à la surveillance continue du SI,
+à la détection des menaces et à la coordination des réponses aux incidents. \\
+STIX & Structured Threat Information eXpression &
+Format JSON standardisé (OASIS) pour représenter des objets de
+threat intelligence. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── T-Z ──────────────────────────────────────────────────────────────────────
+\section*{T -- Z}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{3.5cm}p{6.5cm}}
+\toprule
+\tableauHeader{Terme FR} & \tableauHeader{EN} & \tableauHeader{Définition} \\
+\midrule
+Tactique (ATT\&CK) & Tactic &
+Objectif tactique de l'adversaire~: \textit{pourquoi} il réalise une action
+(ex.~: Persistence, Lateral Movement). \\
+TAXII & Trusted Automated eXchange of Intelligence Information &
+Protocole HTTP(S) pour la transmission automatique d'objets STIX. \\
+Technique (ATT\&CK) & Technique &
+\textit{Comment} l'adversaire atteint son objectif tactique
+(ex.~: T1110.001~— Password Guessing). \\
+Temps de séjour & Dwell time &
+Voir \textit{Dwell time}. \\
+\textit{Threat hunting} & Threat hunting &
+Processus proactif de recherche de signaux de compromission latents,
+conduit par hypothèses CTI. \\
+Timeline & Timeline &
+Reconstruction chronologique des événements d'un incident, issue de la
+corrélation de sources hétérogènes. \\
+TLP & Traffic Light Protocol &
+Système de classification du partage CTI~: RED, AMBER, GREEN, CLEAR. \\
+\textit{Timestomping} & Timestomping &
+Modification frauduleuse des timestamps MACE d'un fichier pour
+brouiller la timeline forensique. \\
+TTP & Tactics, Techniques and Procedures &
+Comportements, méthodes et procédures caractéristiques d'un acteur
+de la menace. Niveau le plus durable pour la défense. \\
+Triage & Triage &
+Qualification d'une alerte~: vrai ou faux positif~? gravité~? urgence~? \\
+Volatilité (données) & Data volatility &
+Durée de vie des données numériques~: les données les plus éphémères
+(RAM) doivent être collectées en priorité. \\
+XDR & Extended Detection and Response &
+Corrélation unifiée HIDS + NIDS + SIEM + CTI avec réponse automatisée. \\
+\textit{Zero-day} & Zero-day &
+Vulnérabilité inconnue du vendeur et sans correctif disponible au moment
+de son exploitation. \\
+\bottomrule
+\end{tabular}
+\end{table}

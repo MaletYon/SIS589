@@ -1,0 +1,464 @@
+% ==============================================================================
+% annexes/templates.tex — UE SIS589
+% Annexe C : Modèles Professionnels
+% ==============================================================================
+
+\chapter{Modèles Professionnels}
+\label{ann:templates}
+
+\begin{boxinfo}
+Cette annexe fournit des modèles directement exploitables en situation
+opérationnelle. Chaque modèle est précédé d'instructions d'utilisation.
+Les champs entre crochets \texttt{[CHAMP]} sont à compléter.
+\end{boxinfo}
+
+% ==============================================================================
+\section{Modèle~1 — Procès-Verbal de Saisie Informatique}
+\label{ann:tpl-pv}
+% ==============================================================================
+
+\begin{boxinfo}
+\textbf{Usage~:} À remplir à la main ou sur ordinateur lors de toute
+acquisition forensique. Conserver l'original dans le dossier physique~;
+scanner et attacher au rapport numérique. Ce modèle est conforme aux
+exigences ISO~27037 et RFC~3227.
+\end{boxinfo}
+
+\medskip
+\begin{center}
+{\large\bfseries\color{CouleurPrimaire}
+PROCÈS-VERBAL DE COLLECTE ET D'ACQUISITION FORENSIQUE}\\[0.5ex]
+{\small Référence~: \texttt{PV-[ANNEE]-[MOIS]-[NUMERO]}}
+\end{center}
+
+\bigskip
+
+\textbf{1. IDENTIFICATION DE LA MISSION}
+
+\begin{table}[H]\centering\small
+\begin{tabular}{p{5cm}p{8.5cm}}
+\toprule
+Référence de l'incident & \texttt{INC-[ANNEE]-[MOIS][JOUR]-[NNN]} \\
+\midrule
+Organisation & \rule{8.5cm}{0.4pt} \\
+Mandat légal & \rule{8.5cm}{0.4pt} \\
+Date et heure (UTC) & \rule{8.5cm}{0.4pt} \\
+Lieu d'intervention & \rule{8.5cm}{0.4pt} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{2. IDENTIFICATION DE L'INVESTIGATEUR}
+
+\begin{table}[H]\centering\small
+\begin{tabular}{p{5cm}p{8.5cm}}
+\toprule
+Nom et prénom & \rule{8.5cm}{0.4pt} \\
+\midrule
+Qualification & \rule{8.5cm}{0.4pt} \\
+Organisation & \rule{8.5cm}{0.4pt} \\
+Contact & \rule{8.5cm}{0.4pt} \\
+Témoin présent & \rule{8.5cm}{0.4pt} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{3. DESCRIPTION DU SYSTÈME SOURCE}
+
+\begin{table}[H]\centering\small
+\begin{tabular}{p{5cm}p{8.5cm}}
+\toprule
+Type de matériel & ☐~Serveur \quad ☐~Poste \quad ☐~Laptop \quad ☐~Mobile \quad ☐~Autre \\
+\midrule
+Marque / Modèle & \rule{8.5cm}{0.4pt} \\
+Numéro de série & \rule{8.5cm}{0.4pt} \\
+Système d'exploitation & \rule{8.5cm}{0.4pt} \\
+Adresse IP / MAC & \rule{8.5cm}{0.4pt} \\
+État lors de la saisie & ☐~Allumé \quad ☐~Éteint \quad ☐~Hibernation \\
+Présence de chiffrement & ☐~Oui (BitLocker / VeraCrypt / Autre) \quad ☐~Non \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{4. SUPPORT DE DESTINATION}
+
+\begin{table}[H]\centering\small
+\begin{tabular}{p{5cm}p{8.5cm}}
+\toprule
+Type & ☐~Disque externe \quad ☐~NAS \quad ☐~Serveur réseau \\
+\midrule
+Marque / Modèle & \rule{8.5cm}{0.4pt} \\
+Numéro de série & \rule{8.5cm}{0.4pt} \\
+Chiffrement du support & ☐~Oui (VeraCrypt / BitLocker) \quad ☐~Non \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{5. MÉTHODE ET OUTILLAGE}
+
+\begin{table}[H]\centering\small
+\begin{tabular}{p{5cm}p{8.5cm}}
+\toprule
+Type d'acquisition & ☐~Image disque bit à bit \quad ☐~Dump mémoire \quad ☐~Capture réseau \\
+\midrule
+Bloqueur en écriture & ☐~Matériel (marque/SN~: \rule{4cm}{0.4pt}) \quad ☐~Logiciel \quad ☐~Absent \\
+Outil utilisé & ☐~dd \quad ☐~dcfldd \quad ☐~FTK Imager \quad ☐~avml \quad ☐~Autre \\
+Version de l'outil & \rule{8.5cm}{0.4pt} \\
+Format de l'image & ☐~RAW (.dd) \quad ☐~E01 \quad ☐~AFF4 \quad ☐~LIME \\
+Fichier(s) produit(s) & \rule{8.5cm}{0.4pt} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{6. INTÉGRITÉ CRYPTOGRAPHIQUE}
+
+\begin{table}[H]\centering\small
+\begin{tabular}{p{3cm}p{11cm}}
+\toprule
+Algorithme & ☐~SHA-256 \quad ☐~SHA-512 \quad ☐~MD5 (déconseillé seul) \\
+\midrule
+Hash source & \texttt{\rule{11cm}{0.4pt}} \\
+Hash image & \texttt{\rule{11cm}{0.4pt}} \\
+Vérification & ☐~\textbf{IDENTIQUES} (intégrité confirmée) \quad ☐~DIVERGENTS (alerter) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{7. OBSERVATIONS ET INCIDENTS DE COLLECTE}
+
+\vspace{3ex}
+\rule{\linewidth}{0.4pt}\\[2ex]
+\rule{\linewidth}{0.4pt}\\[2ex]
+\rule{\linewidth}{0.4pt}
+
+\textbf{8. SIGNATURES}
+
+\begin{table}[H]\centering\small
+\begin{tabular}{p{7cm}p{7cm}}
+\toprule
+\textbf{Investigateur} & \textbf{Témoin / Représentant de l'organisation} \\
+\midrule
+\vspace{2cm} & \vspace{2cm} \\
+Signature~: \rule{4cm}{0.4pt} & Signature~: \rule{4cm}{0.4pt} \\
+Date/heure (UTC)~: & Date/heure (UTC)~: \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\clearpage
+
+% ==============================================================================
+\section{Modèle~2 — Fiche de Gestion d'Incident}
+\label{ann:tpl-incident}
+% ==============================================================================
+
+\begin{boxinfo}
+\textbf{Usage~:} Ouvrir une fiche dès la première alerte qualifiée.
+Mettre à jour en temps réel pendant la gestion. Joindre au rapport final.
+\end{boxinfo}
+
+\medskip
+\begin{center}
+{\large\bfseries\color{CouleurPrimaire}
+FICHE DE GESTION D'INCIDENT DE SÉCURITÉ}
+\end{center}
+
+\textbf{IDENTIFICATION}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{5cm}p{8.5cm}}
+\toprule
+N° de ticket & \texttt{INC-[ANNEE]-[MOIS][JOUR]-[NNN]} \\
+Date/heure de détection (UTC) & \rule{8.5cm}{0.4pt} \\
+Date/heure d'ouverture & \rule{8.5cm}{0.4pt} \\
+Source de détection & ☐~SIEM \quad ☐~EDR \quad ☐~Utilisateur \quad ☐~Partenaire \quad ☐~CERT \\
+Incident Manager & \rule{8.5cm}{0.4pt} \\
+Analyste en charge & \rule{8.5cm}{0.4pt} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{QUALIFICATION}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{5cm}p{8.5cm}}
+\toprule
+Type d'incident & ☐~Brute force \quad ☐~Malware \quad ☐~Ransomware \quad ☐~Fuite \quad ☐~DDoS \quad ☐~Autre \\
+Gravité & ☐~\textcolor{red}{Critique} \quad ☐~\textcolor{orange}{Haute} \quad ☐~\textcolor{yellow!60!black}{Moyenne} \quad ☐~\textcolor{green!50!black}{Basse} \\
+Systèmes affectés & \rule{8.5cm}{0.4pt} \\
+Données affectées & ☐~Oui (préciser~: \rule{4.5cm}{0.4pt}) \quad ☐~Non \quad ☐~Inconnu \\
+IP source & \rule{8.5cm}{0.4pt} \\
+Utilisateur(s) concerné(s) & \rule{8.5cm}{0.4pt} \\
+TTP MITRE principaux & \rule{8.5cm}{0.4pt} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{LOG DES ACTIONS (compléter en temps réel)}
+
+\begin{table}[H]\centering\small
+\begin{tabular}{p{3.5cm}p{2cm}p{7.5cm}p{0.8cm}}
+\toprule
+\tableauHeader{Timestamp (UTC)} & \tableauHeader{Acteur} &
+\tableauHeader{Action effectuée} & \tableauHeader{OK} \\
+\midrule
+\rule{3.5cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{7.5cm}{0.4pt} & ☐ \\
+\rule{3.5cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{7.5cm}{0.4pt} & ☐ \\
+\rule{3.5cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{7.5cm}{0.4pt} & ☐ \\
+\rule{3.5cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{7.5cm}{0.4pt} & ☐ \\
+\rule{3.5cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{7.5cm}{0.4pt} & ☐ \\
+\rule{3.5cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{7.5cm}{0.4pt} & ☐ \\
+\rule{3.5cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{7.5cm}{0.4pt} & ☐ \\
+\rule{3.5cm}{0.4pt} & \rule{2cm}{0.4pt} & \rule{7.5cm}{0.4pt} & ☐ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{NOTIFICATIONS EFFECTUÉES}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3cm}p{3cm}p{2.5cm}p{5cm}}
+\toprule
+\tableauHeader{Destinataire} & \tableauHeader{Canal} &
+\tableauHeader{Timestamp} & \tableauHeader{Contenu résumé} \\
+\midrule
+RSSI & ☐~Tél ☐~Email & \rule{2.5cm}{0.4pt} & \rule{5cm}{0.4pt} \\
+DG / Direction & ☐~Tél ☐~Email & \rule{2.5cm}{0.4pt} & \rule{5cm}{0.4pt} \\
+ANTIC & ☐~Email ☐~Courrier & \rule{2.5cm}{0.4pt} & \rule{5cm}{0.4pt} \\
+Partenaires & ☐~Email & \rule{2.5cm}{0.4pt} & \rule{5cm}{0.4pt} \\
+CERT / CSIRT ext. & ☐~Email & \rule{2.5cm}{0.4pt} & \rule{5cm}{0.4pt} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{CLÔTURE DE L'INCIDENT}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{5cm}p{8.5cm}}
+\toprule
+Date/heure de clôture (UTC) & \rule{8.5cm}{0.4pt} \\
+Durée totale de l'incident & \rule{8.5cm}{0.4pt} \\
+Cause racine identifiée & ☐~Oui \quad ☐~Non (préciser~: \rule{3.5cm}{0.4pt}) \\
+RETEX programmé & ☐~Oui (date~: \rule{4cm}{0.4pt}) \quad ☐~Non \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\clearpage
+
+% ==============================================================================
+\section{Modèle~3 — Rapport d'Incident (Structure)}
+\label{ann:tpl-rapport}
+% ==============================================================================
+
+\begin{boxinfo}
+\textbf{Usage~:} Structure à respecter pour tout rapport d'incident
+de niveau~\gravite{haute} ou \gravite{critique}. Deux versions à produire~:
+technique (RSSI, SOC) et executive (Direction).
+\end{boxinfo}
+
+\medskip
+\begin{center}
+{\large\bfseries\color{CouleurPrimaire}
+RAPPORT D'INCIDENT DE SÉCURITÉ}\\[0.3ex]
+{\small\color{CouleurBordInfo} Version~: ☐~Confidentiel \quad
+☐~Usage interne \quad ☐~TLP:AMBER}
+\end{center}
+
+\textbf{EN-TÊTE DU RAPPORT}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4cm}p{9.5cm}}
+\toprule
+Référence & \texttt{RPT-INC-[ANNEE]-[MOIS][JOUR]-[NNN]} \\
+Organisation & \rule{9.5cm}{0.4pt} \\
+Incident & \texttt{INC-[ANNEE]-[MOIS][JOUR]-[NNN]} \\
+Auteur & \rule{9.5cm}{0.4pt} \\
+Version & v1.0 (Brouillon) \quad v1.1 (Revue RSSI) \quad v2.0 (Final) \\
+Classification & ☐~Public \quad ☐~Interne \quad ☐~Confidentiel \quad ☐~Secret \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{STRUCTURE TYPE}
+
+\begin{enumerate}
+  \item \textbf{Résumé exécutif} (1~page)
+        \begin{itemize}
+          \item Nature et date de l'incident
+          \item Systèmes et données affectés
+          \item Impact métier (disponibilité, confidentialité, finances)
+          \item Mesures prises
+          \item Statut actuel (en cours / résolu)
+          \item Décision(s) requise(s) de la direction
+        \end{itemize}
+
+  \item \textbf{Chronologie de l'incident}
+        \begin{itemize}
+          \item Timeline annotée (tableau~: Timestamp UTC / Source / Événement / TTP MITRE)
+          \item Vecteur d'accès initial
+          \item Progression de l'attaque
+          \item Moment et méthode de détection
+        \end{itemize}
+
+  \item \textbf{Analyse technique}
+        \begin{itemize}
+          \item Vecteur initial (CVE, credential, phishing…)
+          \item Propagation et pivots
+          \item Mapping complet MITRE ATT\&CK
+          \item Outils utilisés par l'attaquant (si identifiés)
+          \item Attribution (si possible~: groupe, pays, motivation)
+        \end{itemize}
+
+  \item \textbf{Preuves collectées}
+        \begin{itemize}
+          \item Tableau~: Pièce / Type / Hash SHA-256 / Date collecte / Outil
+          \item État de la chaîne de custody
+        \end{itemize}
+
+  \item \textbf{Impact}
+        \begin{itemize}
+          \item Technique~: systèmes compromis, durée d'indisponibilité
+          \item Données~: volumes exfiltrés ou chiffrés (estimés)
+          \item Financier~: coût estimé (remédiation + pertes d'exploitation)
+          \item Légal~: obligations de notification déclenchées
+        \end{itemize}
+
+  \item \textbf{Mesures de réponse}
+        \begin{itemize}
+          \item Confinement~: mesures, date, efficacité
+          \item Éradication~: éléments supprimés, comptes réinitialisés
+          \item Rétablissement~: systèmes restaurés, date de reprise
+        \end{itemize}
+
+  \item \textbf{Recommandations}
+        Tableau~: Action / Priorité / Responsable / Délai / KPI de vérification
+
+  \item \textbf{Annexes}
+        Logs bruts, captures d'écran, règles SIEM déclenchées,
+        liste des IoC, chaîne de custody complète
+\end{enumerate}
+
+\clearpage
+
+% ==============================================================================
+\section{Modèle~4 — Notification d'Incident à l'ANTIC}
+\label{ann:tpl-antic}
+% ==============================================================================
+
+\begin{boxinfo}
+\textbf{Usage~:} À envoyer à l'ANTIC dès qu'un incident de sécurité
+significatif est confirmé, conformément à la Loi~2010/012 du Cameroun.
+Envoyer par email recommandé avec accusé de réception à
+\texttt{incident@antic.cm} (adresse indicative~; vérifier l'adresse
+officielle en vigueur).
+\end{boxinfo}
+
+\medskip
+\begin{center}
+{\bfseries\color{CouleurPrimaire}
+NOTIFICATION D'INCIDENT DE SÉCURITÉ INFORMATIQUE}\\[0.3ex]
+{\small Conformément à la Loi n°~2010/012 du 21~décembre~2010}
+\end{center}
+
+\bigskip
+
+\textbf{À l'attention de~:} Monsieur le Directeur Général de l'ANTIC\\
+\textbf{Objet~:} Notification d'incident de sécurité: \texttt{[NOM ENTREPRISE]}
+
+\bigskip
+
+\textbf{1. IDENTIFICATION DE L'ORGANISATION NOTIFIANTE}
+\vspace{0.5ex}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{5cm}p{8.5cm}}
+\toprule
+Dénomination sociale & \rule{8.5cm}{0.4pt} \\
+Secteur d'activité & \rule{8.5cm}{0.4pt} \\
+Adresse & \rule{8.5cm}{0.4pt} \\
+Responsable déclarant & \rule{8.5cm}{0.4pt} \\
+Fonction & \rule{8.5cm}{0.4pt} \\
+Contact & \rule{8.5cm}{0.4pt} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{2. DESCRIPTION DE L'INCIDENT}
+
+\begin{table}[H]\centering\small\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{5cm}p{8.5cm}}
+\toprule
+Nature de l'incident & ☐~Intrusion \quad ☐~Ransomware \quad ☐~Fuite données \quad ☐~DDoS \quad ☐~Autre \\
+Date/heure détectée (UTC) & \rule{8.5cm}{0.4pt} \\
+Date/heure probable de début & \rule{8.5cm}{0.4pt} \\
+Systèmes affectés & \rule{8.5cm}{0.4pt} \\
+Données personnelles concernées & ☐~Oui (nombre estimé~: \rule{3cm}{0.4pt}) \quad ☐~Non \\
+Impact sur les services & \rule{8.5cm}{0.4pt} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{3. MESURES PRISES}
+
+\vspace{1.5ex}
+\rule{\linewidth}{0.4pt}\\[1.5ex]
+\rule{\linewidth}{0.4pt}\\[1.5ex]
+\rule{\linewidth}{0.4pt}
+
+\textbf{4. ASSISTANCE SOUHAITÉE}
+
+☐~Investigation technique \qquad
+☐~Coordination avec d'autres organismes \qquad
+☐~Information uniquement
+
+\bigskip
+
+Fait à \rule{4cm}{0.4pt}, le \rule{3cm}{0.4pt}
+
+\vspace{2ex}
+Signature du responsable déclarant~: \rule{6cm}{0.4pt}
+
+\clearpage
+
+% ==============================================================================
+\section{Modèle~5 — Plan de Remédiation}
+\label{ann:tpl-remediation}
+% ==============================================================================
+
+\begin{boxinfo}
+\textbf{Usage~:} À compléter lors du RETEX post-incident.
+Valider par le RSSI, présenter à la direction, suivre mensuellement.
+\end{boxinfo}
+
+\medskip
+\begin{center}
+{\large\bfseries\color{CouleurPrimaire}
+PLAN DE REMÉDIATION POST-INCIDENT}\\[0.3ex]
+{\small Incident~: \texttt{INC-[REF]} \quad Date~: \rule{4cm}{0.4pt}
+\quad Responsable~: \rule{4cm}{0.4pt}}
+\end{center}
+
+\begin{table}[H]
+\centering\small
+\caption{Plan de remédiation: à compléter}
+\label{tab:tpl-remediation}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{0.5cm}p{4cm}p{1.8cm}p{1.5cm}p{2cm}p{2cm}p{2cm}}
+\toprule
+\tableauHeader{\#} & \tableauHeader{Action} &
+\tableauHeader{Impact} & \tableauHeader{Effort} &
+\tableauHeader{Responsable} & \tableauHeader{Délai} &
+\tableauHeader{KPI} \\
+\midrule
+1 & \rule{4cm}{0.4pt} & ☐~C ☐~H ☐~M & ☐~F ☐~M ☐~E & \rule{2cm}{0.4pt} & J+\rule{0.8cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+2 & \rule{4cm}{0.4pt} & ☐~C ☐~H ☐~M & ☐~F ☐~M ☐~E & \rule{2cm}{0.4pt} & J+\rule{0.8cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+3 & \rule{4cm}{0.4pt} & ☐~C ☐~H ☐~M & ☐~F ☐~M ☐~E & \rule{2cm}{0.4pt} & J+\rule{0.8cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+4 & \rule{4cm}{0.4pt} & ☐~C ☐~H ☐~M & ☐~F ☐~M ☐~E & \rule{2cm}{0.4pt} & J+\rule{0.8cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+5 & \rule{4cm}{0.4pt} & ☐~C ☐~H ☐~M & ☐~F ☐~M ☐~E & \rule{2cm}{0.4pt} & J+\rule{0.8cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+6 & \rule{4cm}{0.4pt} & ☐~C ☐~H ☐~M & ☐~F ☐~M ☐~E & \rule{2cm}{0.4pt} & J+\rule{0.8cm}{0.4pt} & \rule{2cm}{0.4pt} \\
+\bottomrule
+\multicolumn{7}{l}{\small\textit{Impact~: C=Critique, H=Haute, M=Moyenne.
+  Effort~: F=Faible, M=Moyen, E=Élevé.}} \\
+\end{tabular}
+\end{table}

@@ -1,0 +1,385 @@
+% ==============================================================================
+% annexes/tools.tex — UE SIS589
+% Annexe A : Arsenal Outillage — Référence Rapide
+% ==============================================================================
+
+\chapter{Arsenal Outillage: Référence Rapide}
+\label{ann:tools}
+
+\begin{boxinfo}
+Cette annexe recense les outils cités dans le cours, classés par domaine.
+Pour chaque outil~: nom, usage principal, plateforme, licence et commande
+de référence. Toutes les commandes supposent une installation standard~;
+se référer à la documentation officielle pour les options avancées.
+\end{boxinfo}
+
+% ==============================================================================
+\section{Supervision et SIEM}
+\label{ann:tools-siem}
+% ==============================================================================
+
+\begin{table}[H]
+\centering\small
+\caption{Outils de supervision et SIEM}
+\label{tab:tools-siem}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{2.8cm}p{4cm}p{2.5cm}p{2cm}p{2.5cm}}
+\toprule
+\tableauHeader{Outil} & \tableauHeader{Usage} &
+\tableauHeader{Plateforme} & \tableauHeader{Licence} &
+\tableauHeader{URL} \\
+\midrule
+\textbf{Wazuh} & HIDS / SIEM / FIM / Compliance & Linux, Windows & Open Source &
+\texttt{wazuh.com} \\
+\textbf{Elasticsearch} & Indexation et recherche fulltext & Linux & Apache 2.0 &
+\texttt{elastic.co} \\
+\textbf{Kibana} & Visualisation et tableaux de bord & Linux & SSPL &
+\texttt{elastic.co} \\
+\textbf{Logstash} & Collecte et pipeline de logs & Linux & Apache 2.0 &
+\texttt{elastic.co} \\
+\textbf{Suricata} & NIDS/NIPS réseau & Linux & GPLv2 &
+\texttt{suricata.io} \\
+\textbf{Snort~3} & NIDS signatures & Linux, Windows & GPLv2 &
+\texttt{snort.org} \\
+\textbf{Zeek} & Analyse comportementale réseau & Linux & BSD &
+\texttt{zeek.org} \\
+\textbf{TheHive} & Gestion d'incidents + ticketing & Linux & Apache 2.0 &
+\texttt{thehive.io} \\
+\textbf{MISP} & Partage de CTI (IoC) & Linux & Apache 2.0 &
+\texttt{misp-project.org} \\
+\textbf{OpenCTI} & Plateforme CTI graphique & Linux & Apache 2.0 &
+\texttt{filigran.io} \\
+\textbf{Velociraptor} & EDR / DFIR & Linux, Windows & Apache 2.0 &
+\texttt{docs.velociraptor.app} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Commandes essentielles: Wazuh},
+  label={lst:tools-wazuh}]
+# État des agents
+/var/ossec/bin/agent_control -l
+
+# Redémarrer le manager
+systemctl restart wazuh-manager
+
+# Tester une règle (logtest)
+/var/ossec/bin/wazuh-logtest -V
+
+# Recompiler les listes CDB
+/var/ossec/bin/ossec-makelists
+
+# Voir les alertes en temps réel
+tail -f /var/ossec/logs/alerts/alerts.log
+
+# Forcer une analyse FIM immédiate
+/var/ossec/bin/agent_control -a -u AGENT_ID
+\end{lstlisting}
+
+% ==============================================================================
+\section{Collecte de logs}
+\label{ann:tools-logs}
+% ==============================================================================
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Commandes essentielles: collecte de logs},
+  label={lst:tools-logs}]
+# ─── Rsyslog : démarrage et vérification ─────────────────────────────────────
+systemctl status rsyslog
+rsyslogd -N1            # Tester la configuration
+journalctl -u rsyslog -f
+
+# ─── Logstash : démarrage et test pipeline ────────────────────────────────────
+systemctl start logstash
+/usr/share/logstash/bin/logstash --config.test_and_exit \
+  -f /etc/logstash/conf.d/
+
+# ─── Filebeat : état et configuration ────────────────────────────────────────
+filebeat test config
+filebeat test output
+systemctl status filebeat
+
+# ─── NXLog (Windows) ─────────────────────────────────────────────────────────
+# Installer depuis https://nxlog.co/
+# Fichier config : C:\Program Files\nxlog\conf\nxlog.conf
+net start nxlog
+
+# ─── Windows Event Forwarding (WEF) ──────────────────────────────────────────
+# Sur le collecteur Windows
+wecutil qc       # Configurer le collecteur
+wecutil cs subscription.xml  # Créer un abonnement
+wecutil gs "Subscription Name"  # Afficher l'état
+\end{lstlisting}
+
+% ==============================================================================
+\section{Acquisition forensique}
+\label{ann:tools-acq}
+% ==============================================================================
+
+\begin{table}[H]
+\centering\small
+\caption{Outils d'acquisition forensique}
+\label{tab:tools-acq}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3cm}p{4.5cm}p{3cm}p{2cm}p{1.5cm}}
+\toprule
+\tableauHeader{Outil} & \tableauHeader{Usage} &
+\tableauHeader{Plateforme} & \tableauHeader{Licence} &
+\tableauHeader{Format} \\
+\midrule
+\textbf{dd} & Copie bit à bit universelle & Linux & OS natif & RAW \\
+\textbf{dcfldd} & dd avec hachage intégré & Linux & GPL & RAW \\
+\textbf{FTK Imager} & Acquisition GUI + mémoire & Windows & Gratuit & E01, RAW \\
+\textbf{Guymager} & Acquisition GUI Linux & Linux & GPL & E01, AFF \\
+\textbf{avml} & Dump mémoire Linux (Microsoft) & Linux & MIT & LIME \\
+\textbf{LiME} & Module kernel dump RAM & Linux & GPL & LIME \\
+\textbf{WinPmem} & Dump mémoire Windows & Windows & Apache 2.0 & RAW \\
+\textbf{Magnet RAM Capture} & Dump mémoire Windows GUI & Windows & Gratuit & RAW \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Commandes d'acquisition: référence rapide},
+  label={lst:tools-acq}]
+# ─── Acquisition disque avec dcfldd ──────────────────────────────────────────
+dcfldd if=/dev/sdb of=/mnt/evidence/disk.dd \
+  hash=sha256 hashlog=/mnt/evidence/disk.hash \
+  bs=64K conv=noerror,sync sizeprobe=if
+# Vérification
+sha256sum /dev/sdb > /mnt/evidence/source.sha256
+diff /mnt/evidence/disk.hash /mnt/evidence/source.sha256
+
+# ─── Acquisition mémoire avec avml ───────────────────────────────────────────
+sudo ./avml /mnt/usb/ram-$(hostname)-$(date +%Y%m%d-%H%M%S).lime
+sha256sum /mnt/usb/ram-*.lime
+
+# ─── Acquisition mémoire avec WinPmem ────────────────────────────────────────
+winpmem_mini_x64.exe C:\evidence\ram.raw
+certutil -hashfile C:\evidence\ram.raw SHA256
+
+# ─── Montage lecture seule (Linux) ───────────────────────────────────────────
+sudo losetup -r -f disk.dd && sudo losetup -a
+# Identifier offset avec : mmls disk.dd
+sudo mount -o ro,loop,offset=$((SECTEUR*512)) disk.dd /mnt/forensics/
+
+# ─── Acquisition réseau : capture PCAP ───────────────────────────────────────
+tcpdump -i eth0 -w /mnt/evidence/capture.pcap \
+  -C 100 -G 3600 host 10.0.1.10
+\end{lstlisting}
+
+% ==============================================================================
+\section{Analyse forensique}
+\label{ann:tools-analysis}
+% ==============================================================================
+
+\begin{table}[H]
+\centering\small
+\caption{Outils d'analyse forensique}
+\label{tab:tools-analysis}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3cm}p{5cm}p{2.5cm}p{2.5cm}}
+\toprule
+\tableauHeader{Outil} & \tableauHeader{Usage principal} &
+\tableauHeader{Plateforme} & \tableauHeader{Licence} \\
+\midrule
+\textbf{Autopsy} & Analyse forensique complète (GUI) & Linux, Windows & Apache 2.0 \\
+\textbf{The Sleuth Kit} & Analyse CLI système de fichiers & Linux & CPL \\
+\textbf{Volatility~3} & Analyse mémoire vive & Linux & Volatility Lic. \\
+\textbf{Plaso / log2timeline} & Timeline multi-sources & Linux & Apache 2.0 \\
+\textbf{bulk\_extractor} & Extraction patterns dans image & Linux & Public Domain \\
+\textbf{Scalpel} & File carving & Linux & GPL \\
+\textbf{PhotoRec} & Récupération fichiers multi-format & Linux, Windows & GPL \\
+\textbf{RegRipper} & Analyse registre Windows & Linux, Windows & GPL \\
+\textbf{MFTECmd} & Analyse MFT NTFS & Windows & MIT \\
+\textbf{PECmd} & Analyse Prefetch & Windows & MIT \\
+\textbf{LECmd} & Analyse fichiers LNK & Windows & MIT \\
+\textbf{SBECmd} & Analyse Shellbags & Windows & MIT \\
+\textbf{EvtxECmd} & Analyse .evtx hors-ligne & Windows & MIT \\
+\textbf{SIFT Workstation} & Distribution DFIR complète & Linux (VM) & SANS \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Commandes essentielles: The Sleuth Kit},
+  label={lst:tools-tsk}]
+# Structure des partitions
+mmls image.dd
+
+# Liste de tous les fichiers (format bodyfile pour mactime)
+fls -r -m "/" image.dd > bodyfile.txt
+
+# Timeline sur une date
+mactime -b bodyfile.txt -d 2026-04-12 -z UTC > timeline.csv
+
+# Fichiers supprimés
+fls -r -d image.dd
+
+# Extraire un fichier par inode
+icat image.dd INODE_NUMBER > fichier.out
+
+# Hash d'un fichier dans l'image
+hfind -i nsrl-md5.idx hash_de_recherche
+\end{lstlisting}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Commandes essentielles: Volatility~3},
+  label={lst:tools-vol3}]
+# Alias pour raccourcir
+V3="python3 /opt/volatility3/vol.py"
+
+# Windows
+$V3 -f ram.mem windows.info
+$V3 -f ram.mem windows.pslist
+$V3 -f ram.mem windows.pstree
+$V3 -f ram.mem windows.psscan         # Détecter DKOM
+$V3 -f ram.mem windows.netstat
+$V3 -f ram.mem windows.netscan
+$V3 -f ram.mem windows.dlllist --pid PID
+$V3 -f ram.mem windows.malfind        # Injection mémoire
+$V3 -f ram.mem windows.hashdump       # NTLM hashes
+$V3 -f ram.mem windows.cmdline        # Arguments des processus
+
+# Linux
+$V3 -f ram.lime linux.info
+$V3 -f ram.lime linux.pslist
+$V3 -f ram.lime linux.pstree
+$V3 -f ram.lime linux.netstat
+$V3 -f ram.lime linux.bash            # Historique bash en RAM
+$V3 -f ram.lime linux.lsmod           # Modules kernel (rootkits)
+
+# Comparer pslist vs psscan (DKOM)
+$V3 -f ram.mem windows.pslist | awk '{print $2}' | sort > pids_list.txt
+$V3 -f ram.mem windows.psscan | awk '{print $2}' | sort > pids_scan.txt
+comm -13 pids_list.txt pids_scan.txt  # PIDs dans scan mais pas list
+\end{lstlisting}
+
+% ==============================================================================
+\section{Analyse réseau}
+\label{ann:tools-network}
+% ==============================================================================
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Commandes essentielles: Wireshark / tshark},
+  label={lst:tools-wireshark}]
+# ─── tshark : analyse en ligne de commande ────────────────────────────────────
+# Statistiques des conversations
+tshark -r capture.pcap -q -z conv,tcp | head -30
+
+# Afficher les sessions HTTP
+tshark -r capture.pcap -Y "http" \
+  -T fields -e ip.src -e ip.dst \
+  -e http.request.method -e http.request.full_uri
+
+# Extraire les fichiers HTTP
+tshark -r capture.pcap --export-objects http,/tmp/http_objects/
+
+# Analyser les échanges DNS
+tshark -r capture.pcap -Y "dns" \
+  -T fields -e frame.time -e ip.src -e dns.qry.name -e dns.resp.addr
+
+# Détecter les connexions longues (beacon C2 probable)
+tshark -r capture.pcap -q -z conv,tcp | \
+  awk '$NF > 3600'    # Durée > 1h
+
+# ─── Zeek sur PCAP ────────────────────────────────────────────────────────────
+cd /tmp/zeek_analysis/
+zeek -r /evidence/capture.pcap local
+ls -la   # conn.log, dns.log, http.log, ssl.log, files.log
+
+# IPs destinations les plus fréquentes (beacon)
+awk '{print $5}' conn.log | sort | uniq -c | sort -rn | head -20
+
+# Domaines DNS avec forte entropie (DGA)
+awk 'NR>1{print $10}' dns.log | \
+  python3 -c "
+import sys, math, collections
+for d in sys.stdin:
+    d=d.strip()
+    if len(d)<8: continue
+    c=collections.Counter(d)
+    e=-sum(v/len(d)*math.log2(v/len(d)) for v in c.values())
+    if e>3.5: print(f'{e:.2f}  {d}')
+" | sort -rn | head -20
+\end{lstlisting}
+
+% ==============================================================================
+\section{Threat Intelligence}
+\label{ann:tools-cti}
+% ==============================================================================
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Commandes essentielles: MISP API et CTI},
+  label={lst:tools-cti}]
+# ─── Lookup d'une IP dans MISP (CLI) ─────────────────────────────────────────
+curl -s -H "Authorization: $MISP_KEY" \
+  -H "Accept: application/json" \
+  "https://misp.lizbiz.local/attributes/restSearch/value:203.0.113.42" | \
+  python3 -m json.tool
+
+# ─── Export IoC en CSV (dernières 24h) ────────────────────────────────────────
+curl -s -H "Authorization: $MISP_KEY" \
+  "https://misp.lizbiz.local/attributes/restSearch/\
+returnFormat:csv/type:ip-dst/last:24h/to_ids:1" -o /tmp/ioc_ips.csv
+
+# ─── Vérifier un hash sur VirusTotal (API gratuite = 4 req/min) ──────────────
+VT_KEY="votre_cle_api"
+HASH="sha256_du_fichier"
+curl -s -H "x-apikey: $VT_KEY" \
+  "https://www.virustotal.com/api/v3/files/$HASH" | \
+  python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+stats=d['data']['attributes']['last_analysis_stats']
+print(f'Malicious: {stats[\"malicious\"]} / {sum(stats.values())}')
+"
+
+# ─── Abuse.ch : lookup C2 (Feodo Tracker) ────────────────────────────────────
+curl -s "https://feodotracker.abuse.ch/downloads/ipblocklist.csv" | \
+  grep "185.220.101.5"
+\end{lstlisting}
+
+% ==============================================================================
+\section{Durcissement rapide}
+\label{ann:tools-hardening}
+% ==============================================================================
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Commandes de durcissement post-incident},
+  label={lst:tools-hardening}]
+# ─── Réinitialiser les mots de passe (Linux) ─────────────────────────────────
+# Forcer le changement au prochain login
+chage -d 0 username
+# Verrouiller un compte
+usermod -L username
+# Lister les comptes sans mot de passe (vulnérables)
+awk -F: '($2 == "" || $2 == "!") {print $1}' /etc/shadow
+
+# ─── Désactiver l'authentification par mot de passe SSH ──────────────────────
+sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' \
+  /etc/ssh/sshd_config
+sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' \
+  /etc/ssh/sshd_config
+systemctl restart sshd
+
+# ─── Désactiver les comptes de service inutilisés (Windows) ──────────────────
+# Lister tous les comptes actifs
+Get-ADUser -Filter {Enabled -eq $true} -Properties LastLogonDate | \
+  Where {$_.LastLogonDate -lt (Get-Date).AddDays(-90)} | \
+  Select Name, LastLogonDate | Sort LastLogonDate
+
+# Désactiver en masse
+Get-ADUser -Filter {Enabled -eq $true} -Properties LastLogonDate | \
+  Where {$_.LastLogonDate -lt (Get-Date).AddDays(-90)} | \
+  Disable-ADAccount
+
+# ─── Activer MFA SSH (Google Authenticator) ──────────────────────────────────
+apt install libpam-google-authenticator
+# Ajouter dans /etc/pam.d/sshd :
+# auth required pam_google_authenticator.so
+# Dans /etc/ssh/sshd_config :
+# ChallengeResponseAuthentication yes
+# AuthenticationMethods publickey,keyboard-interactive
+\end{lstlisting}
