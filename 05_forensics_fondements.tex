@@ -1,0 +1,423 @@
+% ==============================================================================
+% 05_forensics_fondements.tex — UE SIS589
+% ==============================================================================
+\chapter{Fondements de l'Investigation Numérique}
+\label{chap:forensics-fondements}
+
+\epigraph{\itshape « Every contact leaves a trace. »}
+         {--- Edmond Locard, Principe de transfert}
+
+\begin{boxobjectifs}
+\begin{enumerate}
+  \item Définir l'investigation numérique et ses objectifs (technique et juridique).
+  \item Appliquer l'ordre de volatilité RFC~3227 à un scénario d'incident.
+  \item Acquérir une image disque bit à bit avec vérification d'intégrité.
+  \item Établir et maintenir une chaîne de custody conforme à ISO~27037.
+  \item Distinguer les types de données forensiques~: allouées, supprimées,
+        espace libre, slack space, métadonnées.
+  \item Utiliser les outils d'acquisition de base~: \texttt{dd}, FTK~Imager,
+        \texttt{dcfldd}.
+\end{enumerate}
+\end{boxobjectifs}
+
+% ==============================================================================
+\section{Définition et objectifs de l'investigation numérique}
+\label{sec:forensics-def}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{Investigation numérique (\textit{Digital Forensics})~:} Science
+consistant à identifier, préserver, analyser et présenter des preuves
+numériques de manière méthodique, reproductible et légalement recevable.
+Elle répond à deux objectifs complémentaires~:
+\begin{itemize}
+  \item \textbf{Technique~:} comprendre comment l'attaque s'est déroulée,
+        identifier la vulnérabilité exploitée, reconstruire la timeline,
+        permettre la remédiation.
+  \item \textbf{Juridique~:} constituer un dossier de preuves recevables
+        pour une action pénale, civile ou disciplinaire.
+\end{itemize}
+\end{boxdef}
+
+L'investigation numérique se distingue d'une simple analyse technique par
+son \textbf{impératif d'intégrité}~: chaque action est documentée, chaque
+preuve est scellée, chaque outil est qualifié. Un examen bâclé peut détruire
+des preuves légalement irremplaçables.
+
+\subsection{Domaines de l'investigation numérique}
+
+\begin{table}[H]
+\centering\small
+\caption{Domaines de l'investigation numérique}
+\label{tab:forensics-domaines}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3.5cm}p{5.5cm}p{4.5cm}}
+\toprule
+\tableauHeader{Domaine} & \tableauHeader{Objet} &
+\tableauHeader{Outils de référence} \\
+\midrule
+Disque / Système de fichiers &
+Artefacts OS, fichiers supprimés, timeline &
+Autopsy, FTK, The Sleuth Kit \\
+Mémoire vive (RAM) &
+Processus, connexions réseau, clés en mémoire, malwares injectés &
+Volatility~3, Rekall \\
+Réseau &
+Capture et analyse de trafic, reconstitution sessions &
+Wireshark, NetworkMiner, Zeek \\
+Mobile &
+Applications, SMS, localisation, données cloud &
+Cellebrite, Magnet AXIOM, Oxygen \\
+Cloud &
+Logs cloud, API, IAM, buckets S3 &
+CloudTrail, Azure Monitor, GCP Logging \\
+Malware (RE) &
+Désassemblage, débogage, comportement sandbox &
+Ghidra, IDA Pro, Cuckoo Sandbox \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+\section{Le principe fondamental~: ne rien altérer}
+\label{sec:forensics-alteration}
+% ==============================================================================
+
+\begin{boiteTheoreme}{Principe d'intégrité forensique}
+Toute interaction avec un système susceptible de contenir des preuves doit
+être conçue de sorte à ne laisser aucune trace modifiant l'état de ces preuves.
+Si une modification est techniquement inévitable (mise sous tension, accès
+mémoire), elle doit être minimisée, justifiée et intégralement documentée.
+\end{boiteTheoreme}
+
+En pratique, ce principe implique~:
+\begin{itemize}
+  \item Utiliser des \termecle{bloqueurs en écriture} (\textit{write blockers})
+        matériels lors de l'accès aux disques.
+  \item Travailler systématiquement sur des \textbf{copies forensiques}
+        (images), jamais sur l'original.
+  \item Calculer et vérifier les hashes d'intégrité avant et après chaque
+        étape.
+  \item Documenter chaque action dans un registre horodaté.
+\end{itemize}
+
+% ==============================================================================
+\section{Ordre de volatilité et stratégie d'acquisition}
+\label{sec:volatilite}
+% ==============================================================================
+
+\subsection{Ordre de volatilité (RFC~3227)}
+
+L'ordre de collecte est dicté par la durée de vie des données~: les données
+les plus éphémères sont collectées en premier.
+
+\begin{table}[H]
+\centering\small
+\caption{Ordre de volatilité avec protocole d'acquisition}
+\label{tab:volatilite-protocole}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{0.7cm}p{4cm}p{4cm}p{4.5cm}}
+\toprule
+\tableauHeader{\#} & \tableauHeader{Donnée} &
+\tableauHeader{Outil d'acquisition} & \tableauHeader{Remarque} \\
+\midrule
+1 & Registres CPU, cache & Non capturable sans matériel spécialisé & Accepter la perte \\
+2 & Mémoire vive (RAM) & \texttt{WinPmem}, \texttt{avml}, \texttt{LiME} &
+  Avant tout autre action sur le système \\
+3 & Tables réseau (ARP, routage, connexions) &
+  \texttt{netstat -anp}, \texttt{arp -a}, \texttt{ss -tnp} &
+  Rapide, quelques lignes de commandes \\
+4 & Processus en cours & \texttt{ps auxf}, \texttt{lsof}, \texttt{tasklist} &
+  Avec PID, PPID, arguments \\
+5 & Disque dur / SSD & \texttt{dd}, \texttt{dcfldd}, FTK~Imager &
+  Image bit à bit avec bloqueur en écriture \\
+6 & Journaux distants & Export SIEM, serveur Syslog distant & Déjà collectés en temps réel \\
+7 & Archives / backups & Copie simple & Persistant \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Décision~: système éteint ou allumé~?}
+
+\begin{description}
+  \item[\textbf{Système allumé (\textit{live acquisition})~:}]
+        Permet de capturer la mémoire vive, les connexions réseau actives,
+        les processus, les fichiers ouverts, les clés de chiffrement en mémoire.
+        \textbf{Recommandé si le système est critique ou si le malware est actif.}
+        Risque~: l'attaquant peut avoir un programme de destruction de preuves
+        déclenché par une activité anormale.
+  \item[\textbf{Système éteint (\textit{dead acquisition})~:}]
+        Garantit l'intégrité du disque~; perd la mémoire vive et l'état
+        réseau. \textbf{Recommandé pour l'acquisition du disque.}
+        Protocole~: débrancher l'alimentation sans arrêt logiciel (pour
+        éviter l'exécution des scripts d'arrêt qui pourraient effacer).
+\end{description}
+
+% ==============================================================================
+\section{Acquisition d'une image disque}
+\label{sec:acquisition}
+% ==============================================================================
+
+\subsection{Principes}
+
+L'image forensique est une copie \textbf{bit à bit} de l'intégralité du
+support de stockage~: secteurs alloués, secteurs libres, espace de swap,
+secteur de démarrage, données supprimées. Elle est différente d'une copie
+de fichiers (qui ignore les données supprimées et le slack space).
+
+\subsection{Formats d'image}
+
+\begin{description}
+  \item[\textbf{RAW (\texttt{.dd}, \texttt{.img})~:}]
+        Format brut~: copie bit à bit sans métadonnées. Simple, universel.
+        Taille égale à la taille du disque source.
+  \item[\textbf{E01 (EnCase Evidence File)~:}]
+        Format propriétaire (Guidance Software / OpenEvidence).
+        Inclut les métadonnées d'acquisition, les hashes MD5/SHA-1,
+        et la compression. Standard de facto en environnement judiciaire.
+  \item[\textbf{AFF4 (\textit{Advanced Forensic Format})~:}]
+        Format ouvert, supporte la compression, le chiffrement, les
+        annotations. Utilisé par Velociraptor et certains outils DFIR modernes.
+\end{description}
+
+\subsection{Acquisition avec \texttt{dd} et \texttt{dcfldd}}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Acquisition forensique Linux --- dd et dcfldd},
+  label={lst:dd-acquisition}]
+# ─── Identifier le disque cible (SANS le monter) ────────────────────────────
+lsblk
+fdisk -l
+# Résultat : /dev/sdb = disque cible (NE PAS MONTER)
+
+# ─── dd classique : copie bit à bit ─────────────────────────────────────────
+dd if=/dev/sdb \
+   of=/mnt/evidence/srv-web-01-sda.dd \
+   bs=64K \
+   conv=noerror,sync \
+   status=progress
+
+# Options :
+# if=   : source (disque cible, JAMAIS la machine live sans write blocker)
+# of=   : destination (disque externe ou réseau)
+# bs=   : taille de bloc (64K = optimal SSD)
+# conv=noerror,sync : continuer même si erreur de lecture (bad sectors)
+# status=progress   : afficher l'avancement
+
+# ─── dcfldd : version forensique de dd (hash intégré) ───────────────────────
+dcfldd if=/dev/sdb \
+       of=/mnt/evidence/srv-web-01-sda.dd \
+       hash=sha256 \
+       hashlog=/mnt/evidence/srv-web-01-sda.hash \
+       bs=64K \
+       conv=noerror,sync \
+       sizeprobe=if
+
+# ─── Vérification d'intégrité après acquisition ──────────────────────────────
+sha256sum /dev/sdb > source.sha256
+sha256sum /mnt/evidence/srv-web-01-sda.dd > image.sha256
+diff source.sha256 image.sha256   # DOIT être identique
+\end{lstlisting}
+
+\subsection{Acquisition avec FTK Imager (Windows)}
+
+FTK Imager (AccessData, gratuit) est l'outil standard en environnement
+Windows pour~:
+\begin{itemize}
+  \item Créer des images E01 ou RAW avec calcul automatique MD5/SHA-1.
+  \item Capturer la mémoire vive (\textit{memory dump}).
+  \item Prévisualiser le contenu d'une image sans la monter.
+  \item Exporter des fichiers individuels depuis une image.
+\end{itemize}
+
+\begin{boxcustody}
+\textbf{PV d'acquisition --- Protocole minimal}
+
+\begin{itemize}
+  \item Date/heure (UTC)~: \timestamp{2026-04-12 04:22:00}
+  \item Enquêteur~: MINKA T.E. --- Analyste N2 SOC
+  \item Système source~: srv-web-01.lizbiz.local (IP~: 10.0.1.10)
+  \item Matériel source~: SSD SATA 500~Go, SN~: WD-20260101ABCD
+  \item Bloqueur en écriture~: Tableau UltraBlock SATA/IDE, SN~: TB-0042
+  \item Outil~: dcfldd v1.3.4-1 sur Ubuntu~22.04 (SIFT Workstation)
+  \item Destination~: \texttt{srv-web-01-sda.dd} sur disque externe
+        chiffré VeraCrypt, SN~: EXT-2026-04
+  \item \hash{sha256}{3a7d4f8bc2e910...} (source)
+  \item \hash{sha256}{3a7d4f8bc2e910...} (image) --- \textbf{IDENTIQUES}
+  \item Conservation~: coffre-fort salle ~133, scellé n°~2026-04-001
+\end{itemize}
+\end{boxcustody}
+
+% ==============================================================================
+\section{Acquisition de la mémoire vive}
+\label{sec:acq-ram}
+% ==============================================================================
+
+\begin{boxalert}
+\textbf{La mémoire vive est la preuve la plus précieuse et la plus éphémère.}
+Elle contient~: processus en cours d'exécution, connexions réseau actives,
+clés de chiffrement non protégées, artefacts de malwares injectés,
+mots de passe en clair pour certains services. Elle disparaît à l'extinction
+du système. \textbf{Priorité n°~1 en \textit{live acquisition}.}
+\end{boxalert}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Acquisition mémoire vive --- Linux (avml) et Windows (WinPmem)},
+  label={lst:ram-acquisition}]
+# ─── Linux : avml (Microsoft, open-source, recommandé) ──────────────────────
+# Télécharger avml sur la machine d'analyse, copier sur clé USB
+# Exécuter DEPUIS la clé (ne pas installer sur la machine cible)
+sudo ./avml /mnt/usb/ram-dump-srv-web-01-$(date +%Y%m%d-%H%M%S).lime
+
+# Vérifier l'intégrité
+sha256sum /mnt/usb/ram-dump-srv-web-01-*.lime
+
+# ─── Linux : LiME (Loadable Kernel Module) ───────────────────────────────────
+# Exige la compilation du module pour le kernel exact de la cible
+# À faire sur machine identique, pas sur la cible
+insmod lime-$(uname -r).ko "path=/mnt/usb/ram.lime format=lime"
+
+# ─── Windows : WinPmem ───────────────────────────────────────────────────────
+# Depuis une invite admin, sur un support externe
+winpmem_mini_x64.exe ram-dump-srv-web-01.raw
+# Hash immédiatement après :
+certutil -hashfile ram-dump-srv-web-01.raw SHA256
+
+# ─── FTK Imager (Windows, GUI) ───────────────────────────────────────────────
+# File > Capture Memory > Destination : E:\ (support externe)
+# ✓ Include pagefile (inclure le fichier de pagination)
+# → Produit un fichier .mem avec hash MD5/SHA-1
+\end{lstlisting}
+
+% ==============================================================================
+\section{Structures de données forensiques}
+\label{sec:forensics-data}
+% ==============================================================================
+
+\begin{table}[H]
+\centering\small
+\caption{Types de données forensiques sur disque}
+\label{tab:forensics-data}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3.5cm}p{5.5cm}p{4.5cm}}
+\toprule
+\tableauHeader{Type} & \tableauHeader{Description} &
+\tableauHeader{Intérêt forensique} \\
+\midrule
+Données allouées &
+Fichiers et répertoires actuellement présents dans le système de fichiers &
+Accès direct~; état courant du système \\
+Données supprimées &
+Fichiers supprimés dont les secteurs ne sont pas encore réalloués &
+Récupération possible~; cache de fichiers effacés \\
+Espace non alloué (\textit{unallocated}) &
+Secteurs libres ou anciennement occupés &
+Récupération de fichiers effacés, carving \\
+\textit{Slack space} &
+Espace résiduel entre la fin d'un fichier et la fin de son cluster &
+Peut contenir des fragments de données antérieures \\
+Métadonnées &
+Timestamps, permissions, propriétaire, taille, inode/MFT &
+Timeline, attribution, vérification d'altération \\
+Fichiers de swap &
+Mémoire virtuelle déversée sur disque (pagefile.sys, swap) &
+Fragments de processus, données en mémoire \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{boxdef}
+\textbf{File Carving~:} Technique de récupération de fichiers supprimés
+reposant sur la recherche de signatures de fichiers connues (\textit{magic bytes})
+dans l'espace non alloué, sans s'appuyer sur les métadonnées du système de
+fichiers (qui peuvent être effacées). L'outil \texttt{Scalpel} et Autopsy
+implémentent cette technique.
+\end{boxdef}
+
+% ==============================================================================
+\section{Environnement d'analyse forensique}
+\label{sec:forensics-env}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{SIFT Workstation (SANS Institute)~:} Distribution Linux préconfigurée
+regroupant l'ensemble des outils forensiques open-source~: Autopsy, Volatility,
+log2timeline, Plaso, The Sleuth Kit, NetworkMiner, bulk\_extractor, etc.
+Disponible en VM VMware ou OVA. Standard de formation GIAC/SANS.
+\end{boxdef}
+
+Règles d'or de l'environnement d'analyse~:
+\begin{itemize}
+  \item \textbf{Isolement réseau~:} la station d'analyse est isolée
+        d'Internet pendant l'analyse (risque de beacon-back).
+  \item \textbf{Snapshot avant chaque analyse~:} permettre le retour
+        arrière si une erreur est commise.
+  \item \textbf{Journalisation des commandes~:} tout ce qui est tapé
+        est enregistré (\texttt{script session.log}).
+  \item \textbf{Ne jamais monter une image en lecture-écriture.}
+\end{itemize}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Montage d'une image disque en lecture seule (SIFT)},
+  label={lst:mount-image}]
+# Monter une image RAW en lecture seule avec loopback
+sudo losetup -r -f srv-web-01-sda.dd
+losetup -a   # vérifier le nom assigné, ex: /dev/loop0
+
+# Identifier les partitions dans l'image
+sudo fdisk -l /dev/loop0
+mmls srv-web-01-sda.dd   # The Sleuth Kit
+
+# Monter la partition (offset en secteurs × 512 = bytes)
+# Exemple : partition Linux ext4 commence au secteur 2048
+sudo mount -o ro,loop,offset=$((2048*512)) \
+           srv-web-01-sda.dd /mnt/forensics/
+
+# Ou directement avec Autopsy (GUI) : Add Evidence Item > Image File
+# Autopsy calcule automatiquement les offsets et monte en lecture seule.
+
+# Toujours vérifier le hash AVANT d'analyser
+sha256sum srv-web-01-sda.dd  # Doit correspondre au PV d'acquisition
+\end{lstlisting}
+
+% ==============================================================================
+\section*{Résumé}
+% ==============================================================================
+
+\begin{boxresume}
+\begin{itemize}
+  \item L'investigation numérique a deux objectifs~: technique
+        (comprendre l'attaque) et juridique (produire des preuves).
+  \item Principe fondateur~: ne rien altérer. Bloqueur en écriture,
+        copie sur image, hashes d'intégrité à chaque étape.
+  \item Ordre de volatilité (RFC~3227)~: RAM~$\to$~réseau~$\to$~processus
+        ~$\to$~disque~$\to$~journaux~$\to$~archives.
+  \item Décision live/dead~: live pour capturer la RAM~; dead pour
+        l'image disque intègre.
+  \item Formats d'image~: RAW (dd), E01 (FTK/EnCase), AFF4.
+        Outils~: dd, dcfldd, FTK Imager, avml/WinPmem.
+  \item Chaîne de custody~: documenter chaque accès, chaque hash,
+        chaque transfert.
+  \item Environnement SIFT Workstation~: isolé réseau, lecture seule,
+        journalisation des actions.
+\end{itemize}
+\end{boxresume}
+
+\begin{boxexo}
+\textbf{Ex.~5.1 — Stratégie d'acquisition.}
+Vous arrivez devant \texttt{srv-erp-01} (Windows Server~2022) qui
+est allumé et sur lequel une connexion RDP suspecte est active.
+Décrivez dans l'ordre les 8~premières actions à effectuer, en
+justifiant chaque décision.
+
+\medskip\textbf{Ex.~5.2 — Commande d'acquisition.}
+Rédigez la commande \texttt{dcfldd} complète pour acquérir le disque
+\texttt{/dev/sdc} vers le fichier \texttt{erp-sdc.dd} sur un support
+externe \texttt{/mnt/evidence}, avec~: hachage SHA-256, log du hash
+dans \texttt{erp-sdc.sha256.log}, blocs de 128K.
+Ajoutez la commande de vérification d'intégrité.
+
+\medskip\textbf{Ex.~5.3 — PV de saisie.}
+Rédigez le PV de collecte complet pour l'exercice~5.2,
+en respectant le modèle de la boîte custody de ce chapitre.
+\end{boxexo}

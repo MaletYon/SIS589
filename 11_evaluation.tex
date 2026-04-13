@@ -1,0 +1,348 @@
+% ==============================================================================
+% 11_evaluation.tex — UE SIS589
+% ==============================================================================
+\chapter{Évaluation et Grille de Compétences}
+\label{chap:evaluation}
+
+\epigraph{\itshape « L'examen n'est pas la fin de l'apprentissage~;
+  c'en est la mesure. »}
+         {--- Principe pédagogique ENSP}
+
+% ==============================================================================
+\section{Objectifs et structure de l'évaluation}
+\label{sec:eval-structure}
+% ==============================================================================
+
+L'évaluation de l'UE SIS589 porte sur trois dimensions~:
+
+\begin{enumerate}
+  \item \textbf{Connaissances théoriques~:} maîtrise des concepts,
+        définitions, normes et référentiels.
+  \item \textbf{Compétences techniques~:} capacité à analyser des
+        artefacts, rédiger des règles, interpréter des journaux,
+        conduire une investigation.
+  \item \textbf{Compétences professionnelles~:} raisonnement en
+        situation, documentation, communication.
+\end{enumerate}
+
+\textbf{Répartition des notes~:}
+\begin{itemize}
+  \item Contrôle continu (QCM en ligne après chaque partie)~: 20\,\%
+  \item Rapports de laboratoires (Lab~1, 2, 3)~: 40\,\%
+  \item Examen final (4~heures)~: 40\,\%
+\end{itemize}
+
+% ==============================================================================
+\section{Grille de compétences}
+\label{sec:competences}
+% ==============================================================================
+
+\begin{table}[H]
+\centering\small
+\caption{Grille de compétences SIS589 --- niveaux de maîtrise}
+\label{tab:competences}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{5cm}p{2.5cm}p{6cm}}
+\toprule
+\tableauHeader{Compétence} & \tableauHeader{Niveau attendu} &
+\tableauHeader{Indicateurs de maîtrise} \\
+\midrule
+Architecturer un SOC minimal &
+Opérationnel &
+Choisir les composants, les positionner, justifier le choix \\
+Configurer un SIEM (Wazuh + ELK) &
+Pratique &
+Déployer agents, pipeline Logstash, tableau de bord \\
+Rédiger une règle de détection &
+Pratique &
+Syntaxe Wazuh ou Sigma correcte, mapping MITRE \\
+Analyser des journaux multi-sources &
+Maîtrise &
+Identifier les événements pertinents, construire la timeline \\
+Conduire une acquisition forensique &
+Pratique &
+dd / FTK Imager, hash, PV de collecte conforme ISO~27037 \\
+Analyser un dump mémoire &
+Opérationnel &
+Commandes Volatility~3 essentielles, interprétation \\
+Analyser un PCAP &
+Opérationnel &
+Filtres Wireshark, identification des flux suspects \\
+Piloter une réponse à incident &
+Opérationnel &
+Cycle ISO~27035, qualification gravité, confinement \\
+Rédiger un rapport d'incident &
+Maîtrise &
+Structure en 8~sections, niveau exécutif + technique \\
+Utiliser MISP / CTI &
+Notionnel &
+Rechercher un IoC, créer un événement, exporter pour SIEM \\
+Appliquer le cadre légal camerounais &
+Notionnel &
+Identifier les infractions, obligations ANTIC, chaîne de custody \\
+Conduire un RETEX &
+Opérationnel &
+6~sections, 5~Pourquoi, plan de remédiation priorisé \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Niveaux~:}
+\textit{Notionnel}~= connaît le concept et peut l'expliquer~;
+\textit{Opérationnel}~= peut appliquer en situation guidée~;
+\textit{Pratique}~= applique de manière autonome~;
+\textit{Maîtrise}~= adapte, optimise, forme les autres.
+
+% ==============================================================================
+\section{Sujets d'examen types}
+\label{sec:sujets-types}
+% ==============================================================================
+
+\subsection{Partie~A --- Analyse d'incident (6~points)}
+
+\begin{boxexo}
+\textbf{Contexte.}
+À 04h15 le 15~mai~2026, le SIEM de l'organisation NovaTech (entreprise
+de transfert d'argent mobile, 200~employés, Douala) génère l'alerte
+suivante~:
+
+\begin{verbatim}
+RULE    : 100205 — Brute force RDP
+LEVEL   : 10 (HIGH)
+SOURCE  : 196.207.12.88  (ZA, non référencée CTI)
+TARGET  : srv-app-01.novatech.local (192.168.20.10)
+COUNT   : 12 echecs / 80s  users: Administrator, admin, novatech
+MITRE   : T1110.003 — Password Spraying
+\end{verbatim}
+
+\textbf{Questions~:}
+
+\begin{enumerate}[label=\textbf{Q\arabic*.}]
+  \item (1 pt) Qualifiez l'incident selon la grille de classification.
+        Justifiez en 2~phrases.
+  \item (1 pt) Listez les 4~premières actions à mener dans les
+        15~minutes suivant l'alerte. Indiquez qui les mène (N1 / N2).
+  \item (1 pt) Rédigez la commande Wazuh/KQL permettant de vérifier
+        si l'IP 196.207.12.88 a réussi une authentification
+        RDP (EID~4624, type~10) dans les 2~heures suivant l'alerte.
+  \item (2 pts) L'investigation révèle~: connexion RDP réussie à 04h22
+        (user: \texttt{administrator}), création d'un nouveau compte
+        \texttt{svc\_update} à 04h31 (EID~4720), connexion SMB vers
+        srv-bdd-01 à 04h45 (EID~4624). Construisez la timeline annotée
+        MITRE ATT\&CK de ces 4~événements (alerte + 3~événements).
+  \item (1 pt) Quel artefact forensique, sur le serveur srv-app-01,
+        fournirait la preuve d'exécution de commandes par l'attaquant~?
+        Comment l'acquérir~?
+\end{enumerate}
+\end{boxexo}
+
+\subsection{Partie~B --- Investigation forensique (6~points)}
+
+\begin{boxexo}
+\textbf{Contexte.}
+Vous recevez une image disque \texttt{srv-app-01.dd} et un dump mémoire
+\texttt{srv-app-01-ram.lime} acquis à 05h30.
+
+\begin{enumerate}[label=\textbf{Q\arabic*.}]
+  \item (1 pt) Décrivez la procédure complète de vérification d'intégrité
+        de l'image avant de commencer l'analyse. Quelle commande~?
+        Que vérifier~?
+  \item (1 pt) Listez 4~commandes Volatility~3 à exécuter en premier
+        sur le dump mémoire, dans l'ordre, et justifiez chaque choix.
+  \item (2 pts) Le Prefetch révèle l'exécution de \texttt{MSHTA.EXE}
+        une seule fois à 04h29. Le registre contient une nouvelle clé
+        \texttt{HKCU\textbackslash Run\textbackslash WindowsUpdater}
+        pointant vers \texttt{C:\textbackslash ProgramData\textbackslash
+        upd.vbs}. Le fichier \texttt{upd.vbs} est absent du disque
+        (supprimé). Identifiez les TTPs MITRE correspondants et décrivez
+        comment récupérer le fichier supprimé.
+  \item (1 pt) Rédigez les 5~éléments obligatoires d'un PV de collecte
+        conforme à ISO~27037 pour ce dump mémoire.
+  \item (1 pt) La BDD clients (50~000 dossiers) a été accédée entre
+        04h45 et 05h15 selon les logs MySQL. Quelles obligations légales
+        s'appliquent à NovaTech~? Délai~? Destinataire~?
+\end{enumerate}
+\end{boxexo}
+
+\subsection{Partie~C --- Supervision et architecture (4~points)}
+
+\begin{boxexo}
+\begin{enumerate}[label=\textbf{Q\arabic*.}]
+  \item (1 pt) Définissez~: MTTD, MTTR, FPR. Pour chacun~:
+        une valeur cible pour un SOC de niveau~3.
+  \item (1 pt) NovaTech n'a pas détecté l'attaque RDP à temps
+        (MTTD~= 35~jours). Listez 3~sources de logs qui auraient
+        dû être collectées et 2~règles SIEM spécifiques au RDP.
+  \item (1 pt) Décrivez la différence entre un Playbook et un Runbook.
+        Donnez un exemple de chacun applicable à cet incident.
+  \item (1 pt) NovaTech souhaite déployer un IDS. Comparez NIDS en mode
+        passif et HIDS Wazuh~: pour chaque solution, indiquez ce
+        qu'elle aurait détecté ou non dans cet incident.
+\end{enumerate}
+\end{boxexo}
+
+\subsection{Partie~D --- Cadre légal et RETEX (4~points)}
+
+\begin{boxexo}
+\begin{enumerate}[label=\textbf{Q\arabic*.}]
+  \item (1 pt) Quelles infractions de la Loi camerounaise~2010/012
+        l'attaquant a-t-il commises~? Citez les articles.
+  \item (1 pt) NovaTech souhaite porter plainte. Listez les 3~types
+        de preuves numériques à constituer, avec leur forme
+        (fichier, hash, PV). Quelle est la condition d'admissibilité
+        principale~?
+  \item (2 pts) Rédigez le plan de remédiation post-incident de NovaTech~:
+        6~actions minimum, priorisées (impact, effort, délai,
+        responsable, indicateur de vérification).
+\end{enumerate}
+\end{boxexo}
+
+% ==============================================================================
+\section{Corrigé indicatif --- Partie~A}
+\label{sec:corrige-partieA}
+% ==============================================================================
+
+\begin{boiteRemarque}{Usage pédagogique}
+Ce corrigé indicatif est fourni à des fins pédagogiques. D'autres
+formulations sont acceptées si elles reflètent une maîtrise correcte
+des concepts.
+\end{boiteRemarque}
+
+\textbf{Q1 — Qualification.}
+Gravité~\gravite{haute} (au minimum)~: l'attaquant cible un serveur
+applicatif de production avec du password spraying (T1110.003), technique
+plus discrète que le brute force classique. L'escalade vers N2 est
+immédiate. Si une authentification réussie est confirmée, escalade vers
+\gravite{critique}.
+
+\textbf{Q2 — Premières actions.}
+\begin{enumerate}
+  \item N1~: Ouvrir ticket INC et documenter l'alerte.
+  \item N1~: Vérifier si l'IP est dans la liste blanche
+        (partenaire, VPN interne)~; sinon confirmer la qualification.
+  \item N2~: Rechercher dans le SIEM si l'IP a réussi une authentification
+        dans les 2~h suivantes (EID~4624 type~10).
+  \item N2~: Notifier le RSSI et l'Incident Manager~; préparer
+        le confinement si succès confirmé.
+\end{enumerate}
+
+\textbf{Q3 — Requête KQL.}
+\begin{lstlisting}[style=StyleTerminal]
+event.code: "4624"
+  AND winlog.event_data.LogonType: "10"
+  AND winlog.event_data.IpAddress: "196.207.12.88"
+  AND @timestamp: [2026-05-15T04:15:00 TO 2026-05-15T06:15:00]
+\end{lstlisting}
+
+\textbf{Q4 — Timeline annotée.}
+
+\begin{table}[H]
+\centering\small
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3cm}p{3.5cm}p{5.5cm}p{2cm}}
+\toprule
+\tableauHeader{Timestamp} & \tableauHeader{Événement} &
+\tableauHeader{Description} & \tableauHeader{MITRE} \\
+\midrule
+04h15 & EID~\textit{custom} & Password spraying RDP, 12~échecs & T1110.003 \\
+04h22 & EID~4624 type~10 & Auth. RDP réussie (administrator) & T1078 \\
+04h31 & EID~4720 & Création compte svc\_update & T1136.001 \\
+04h45 & EID~4624 type~3 & Connexion SMB srv-bdd-01 & T1021.002 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Q5 — Artefact forensique.}
+Le \textbf{Prefetch} (\texttt{C:\textbackslash Windows\textbackslash Prefetch\textbackslash}) fournirait la preuve d'exécution~:
+nom de l'exécutable, date/heure de dernière exécution, nombre d'exécutions,
+DLLs chargées. Acquisition~: copie depuis une image montée en lecture seule~;
+ou \texttt{PECmd.exe -d C:\textbackslash Windows\textbackslash Prefetch --csv output/}.
+
+% ==============================================================================
+\section{Barème des laboratoires}
+\label{sec:bareme-labs}
+% ==============================================================================
+
+\begin{table}[H]
+\centering\small
+\caption{Barème des rapports de laboratoires}
+\label{tab:bareme-labs}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{1cm}p{4cm}p{6.5cm}p{2cm}}
+\toprule
+\tableauHeader{Lab} & \tableauHeader{Titre} &
+\tableauHeader{Critères d'évaluation} & \tableauHeader{Coefficient} \\
+\midrule
+1 & SIEM et détection &
+Configuration correcte du pipeline (4 pts)~;
+règles opérationnelles (3 pts)~;
+qualité du tableau de bord (2 pts)~;
+rapport d'alerte structuré (1 pt) &
+$\times$~1 \\
+2 & Forensique disque &
+PV de collecte conforme (3 pts)~;
+timeline correcte avec MITRE (4 pts)~;
+artefacts identifiés (2 pts)~;
+qualité du rapport (1 pt) &
+$\times$~1.5 \\
+3 & Simulation Tabletop ransomware &
+Qualification de l'incident (2 pts)~;
+playbook appliqué (3 pts)~;
+plan de remédiation (3 pts)~;
+rapport exécutif (2 pts) &
+$\times$~1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+\section{Conseils méthodologiques pour l'examen}
+\label{sec:conseils-exam}
+% ==============================================================================
+
+\begin{boxinfo}
+\textbf{Pour l'examen final~:}
+\begin{itemize}
+  \item \textbf{Lire le sujet en entier avant d'écrire.} Les questions
+        s'enchaînent~: la réponse à Q3 peut dépendre de Q2.
+  \item \textbf{Être précis sur les noms d'outils et les EID.}
+        \og{}Un log Windows\fg{} n'est pas une réponse~;
+        \og{}Event ID~4624 dans le journal Security\fg{} en est une.
+  \item \textbf{Citer les références normatives.} Pour toute question
+        sur les preuves ou les obligations légales, citer la norme
+        (ISO~27037, RFC~3227, Loi~2010/012 + article).
+  \item \textbf{Structurer les réponses techniques.} Pour une timeline~:
+        tableau avec colonnes Timestamp / Source / Événement / MITRE.
+        Pour un playbook~: étapes numérotées avec responsable.
+  \item \textbf{Faire preuve de bon sens opérationnel.} Avant de
+        répondre techniquement, se demander~: \og{}Dans la vraie vie,
+        qu'est-ce qui est prioritaire ici~?\fg{}
+\end{itemize}
+\end{boxinfo}
+
+% ==============================================================================
+\section*{Récapitulatif des compétences du cours}
+% ==============================================================================
+
+\begin{boxresume}
+\textbf{À l'issue de SIS589, vous êtes capable de~:}
+\begin{itemize}
+  \item Opérer un SOC minimal~: déployer Wazuh + ELK, rédiger des règles
+        de corrélation SIEM, calculer et interpréter MTTD / MTTR / FPR.
+  \item Lire, corréler et interpréter des journaux hétérogènes pour
+        reconstruire la chronologie d'une attaque réelle.
+  \item Acquérir des preuves numériques (disque, RAM, réseau) dans le
+        respect des principes forensiques (intégrité, chaîne de custody,
+        ISO~27037 / RFC~3227).
+  \item Analyser les artefacts Windows (MFT, Prefetch, registre, Sysmon)
+        et Linux (inodes, bash\_history, persistances) en utilisant
+        Volatility~3, The Sleuth Kit, Autopsy.
+  \item Piloter une réponse à incident selon ISO~27035~: qualification,
+        confinement, éradication, RETEX.
+  \item Appliquer le cadre juridique camerounais (Loi~2010/012) et
+        produire des preuves légalement recevables.
+  \item Intégrer la Cyber Threat Intelligence (MISP, STIX, ATT\&CK)
+        dans les processus de détection et de réponse.
+  \item Conduire un RETEX structuré et un plan de remédiation priorisé.
+\end{itemize}
+\end{boxresume}

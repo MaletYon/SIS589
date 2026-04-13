@@ -1,0 +1,453 @@
+% ==============================================================================
+% 06_forensics_systeme.tex — UE SIS589
+% ==============================================================================
+\chapter{Forensique Système~: Disque et Artefacts OS}
+\label{chap:forensics-systeme}
+
+\epigraph{\itshape « Les systèmes d'exploitation sont les témoins
+  silencieux de nos actions numériques. »}
+         {--- Joshua I. James}
+
+\begin{boxobjectifs}
+\begin{enumerate}
+  \item Analyser les artefacts forensiques Windows~: MFT, Prefetch, registre,
+        LNK, shellbags, NTDS.dit.
+  \item Analyser les artefacts Linux~: inodes, bashhistory, journal systemd,
+        fichiers de configuration.
+  \item Reconstruire une timeline NTFS à partir des timestamps MACE.
+  \item Récupérer des fichiers supprimés par carving et analyse des inodes.
+  \item Utiliser Autopsy et The Sleuth Kit pour l'analyse systématique.
+  \item Détecter les marqueurs de persistance (Run keys, services, cron, LD\_PRELOAD).
+\end{enumerate}
+\end{boxobjectifs}
+
+% ==============================================================================
+\section{Forensique Windows}
+\label{sec:forensics-windows}
+% ==============================================================================
+
+\subsection{Le système de fichiers NTFS~: structures clés}
+
+\begin{boxdef}
+\textbf{MFT (\textit{Master File Table})~:} Structure centrale du système
+de fichiers NTFS. Chaque fichier ou répertoire est représenté par un
+enregistrement MFT de 1~Ko. L'enregistrement contient les attributs du
+fichier, dont les timestamps MACE (\textit{Modified, Accessed, Created,
+Entry Modified}) et éventuellement les données elles-mêmes (fichiers $<$~700~octets).
+La MFT est l'équivalent NTFS de la table des inodes Unix.
+\end{boxdef}
+
+\begin{table}[H]
+\centering\small
+\caption{Timestamps MACE et leur valeur forensique}
+\label{tab:mace}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{2cm}p{4.5cm}p{7cm}}
+\toprule
+\tableauHeader{Timestamp} & \tableauHeader{Événement enregistré} &
+\tableauHeader{Valeur de détection} \\
+\midrule
+\textbf{M} (\textit{Modified}) &
+Dernière modification du contenu &
+Changement de contenu post-infection \\
+\textbf{A} (\textit{Accessed}) &
+Dernier accès (lecture ou exécution) &
+Accès récent malgré une date de création ancienne \\
+\textbf{C} (\textit{Changed/Created}) &
+Création du fichier &
+Comparé à M~: si C~$>$~M, le fichier a été copié \\
+\textbf{E} (\textit{Entry Modified}) &
+Dernière modification de l'entrée MFT &
+Détection du timestomping~: E différent de C/M \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{boiteRemarque}{Timestomping}
+Le timestomping (T1070.006) modifie les timestamps M/A/C via les API Windows
+pour que l'attaquant fasse passer son malware pour un fichier légitime ancien.
+Mais il ne modifie pas le timestamp E (Entry Modified, stocké dans l'attribut
+\texttt{\$STANDARD\_INFORMATION} de la MFT). Un écart entre M/A/C et E
+est un indicateur de timestomping.
+\end{boiteRemarque}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse MFT et timestamps avec MFTECmd et The Sleuth Kit},
+  label={lst:mft-analysis}]
+# ─── Extraire et analyser la MFT avec MFTECmd (Eric Zimmermann) ─────────────
+MFTECmd.exe -f "C:\$MFT" --csv E:\output --csvf mft_export.csv
+
+# Rechercher des fichiers créés pendant la fenêtre d'incident
+# dans le CSV, filtrer sur CreatedOn entre 2026-04-12T02:00 et 04:00
+
+# ─── The Sleuth Kit : liste de tous les fichiers (image Linux ext4) ──────────
+# fls = file listing depuis une image
+fls -r -m "/" srv-web-01-sda.dd > bodyfile.txt
+# -r = récursif, -m "/" = format bodyfile (compatible mactime)
+
+# Générer la timeline NTFS avec mactime
+mactime -b bodyfile.txt -d 2026-04-12 > timeline-20260412.csv
+# -d = filtrer sur une date
+
+# ─── Rechercher des fichiers supprimés (entrées orphelines) ──────────────────
+fls -d srv-web-01-sda.dd   # -d = fichiers supprimés uniquement
+
+# Récupérer un fichier supprimé par numéro d'inode
+icat srv-web-01-sda.dd 12345 > fichier_recupere.bin
+\end{lstlisting}
+
+\subsection{Artefacts Windows clés}
+
+\subsubsection{Registre Windows}
+
+\begin{boxdef}
+\textbf{Registre Windows~:} Base de données hiérarchique stockant la
+configuration du système et des applications. Cinq ruches principales
+(\textit{hives})~: SYSTEM, SOFTWARE, SAM, SECURITY, NTUSER.DAT.
+Le registre est une mine forensique~: persistances, MRU, connexions réseau,
+logiciels installés, comptes.
+\end{boxdef}
+
+\begin{table}[H]
+\centering\small
+\caption{Clés de registre forensiques prioritaires}
+\label{tab:registry-forensics}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{8cm}p{5.5cm}}
+\toprule
+\tableauHeader{Clé de registre} & \tableauHeader{Information forensique} \\
+\midrule
+\texttt{HKLM\textbackslash Software\textbackslash Microsoft\textbackslash Windows
+\textbackslash CurrentVersion\textbackslash Run} &
+Programmes démarrés au lancement (persistance T1547.001) \\
+\texttt{HKCU\textbackslash Software\textbackslash Microsoft\textbackslash Windows
+\textbackslash CurrentVersion\textbackslash Run} &
+Persistance par compte utilisateur \\
+\texttt{HKLM\textbackslash SYSTEM\textbackslash CurrentControlSet
+\textbackslash Services} &
+Services installés (T1543.003) \\
+\texttt{HKLM\textbackslash SAM\textbackslash SAM\textbackslash Domains
+\textbackslash Account\textbackslash Users} &
+Comptes locaux, hash NTLM \\
+\texttt{HKCU\textbackslash Software\textbackslash Microsoft\textbackslash Windows
+\textbackslash CurrentVersion\textbackslash Explorer\textbackslash RecentDocs} &
+Fichiers récemment ouverts (MRU) \\
+\texttt{HKLM\textbackslash SYSTEM\textbackslash CurrentControlSet
+\textbackslash Control\textbackslash TimeZoneInformation} &
+Fuseau horaire (critique pour la timeline) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse de registre avec RegRipper},
+  label={lst:registry-forensics}]
+# RegRipper : extraction automatique des artefacts de registre
+# Depuis l'image montée ou les ruches copiées
+
+# Extraire et analyser la ruche SYSTEM
+rip.pl -r /mnt/forensics/Windows/System32/config/SYSTEM \
+       -f system > system_report.txt
+
+# Extraire la ruche SOFTWARE (logiciels installés, Run keys)
+rip.pl -r /mnt/forensics/Windows/System32/config/SOFTWARE \
+       -f software > software_report.txt
+
+# Extraire NTUSER.DAT d'un utilisateur (MRU, historique)
+rip.pl -r /mnt/forensics/Users/admin/NTUSER.DAT \
+       -f ntuser > ntuser_admin_report.txt
+
+# Clés de Run (persistances) spécifiquement
+rip.pl -r /mnt/forensics/Windows/System32/config/SOFTWARE \
+       -p run  # -p = plugin spécifique
+
+# Rechercher un nom de malware connu dans le registre exporté
+grep -i "lp.sh\|malware\|backdoor" system_report.txt software_report.txt
+\end{lstlisting}
+
+\subsubsection{Prefetch}
+
+\begin{boxdef}
+\textbf{Prefetch (\texttt{C:\textbackslash Windows\textbackslash Prefetch\textbackslash})~:}
+Mécanisme d'optimisation Windows qui enregistre, pour chaque exécutable lancé,
+le nombre d'exécutions, la dernière date d'exécution et les DLL chargées.
+Existence d'un fichier Prefetch = preuve d'exécution, même si l'exécutable
+a été supprimé.
+\end{boxdef}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse Prefetch avec PECmd (Eric Zimmermann)},
+  label={lst:prefetch}]
+# PECmd.exe : analyser tous les fichiers Prefetch
+PECmd.exe -d "C:\Windows\Prefetch" --csv E:\output --csvf prefetch.csv
+
+# Rechercher l'exécution de fichiers suspects pendant la fenêtre d'incident
+# Dans prefetch.csv, filtrer LastRun entre 2026-04-12T02:00 et 04:00
+
+# Exemple de résultat révélateur :
+# Executable : WGET.EXE
+# LastRun    : 2026-04-12 03:17:03
+# RunCount   : 1
+# → confirme l'événement Sysmon EID 1 de notre timeline
+\end{lstlisting}
+
+\subsubsection{Shellbags et LNK files}
+
+\begin{description}
+  \item[\textbf{Shellbags~:}] Clés de registre mémorisant les dossiers
+        explorés via l'Explorateur Windows (taille, position, type de vue).
+        Forensiquement~: prouvent qu'un utilisateur a navigué dans un
+        répertoire, \textbf{même si ce répertoire a été supprimé}.
+  \item[\textbf{Fichiers LNK (.lnk)~:}] Raccourcis Windows générés
+        automatiquement à l'ouverture d'un fichier. Contiennent le chemin
+        complet de la cible, le volume, le MFT record ID, les timestamps.
+        Forensiquement~: prouvent l'ouverture d'un fichier (ex.~: document
+        exfiltré) même si l'original n'est plus là.
+\end{description}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse Shellbags et LNK avec LECmd / SBECmd},
+  label={lst:shellbags-lnk}]
+# LECmd.exe : analyser les fichiers LNK d'un utilisateur
+LECmd.exe -d "C:\Users\admin\AppData\Roaming\Microsoft\Windows\Recent" \
+           --csv E:\output --csvf lnk_admin.csv
+
+# SBECmd.exe : analyser les shellbags (USRCLASS.DAT)
+SBECmd.exe -d "C:\Users\admin\AppData\Local\Microsoft\Windows" \
+            --csv E:\output
+
+# Ces outils font partie de la suite Eric Zimmermann Tools (EZTools)
+# Téléchargement gratuit sur https://ericzimmermann.github.io/
+\end{lstlisting}
+
+\subsubsection{Événements Windows~: journal de sécurité}
+
+Voir chapitre~2 (tableau~\ref{tab:event-ids}). En phase forensique,
+l'analyse se fait depuis les fichiers \texttt{.evtx} exportés ou montés
+depuis l'image~:
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse d'un fichier .evtx hors-ligne},
+  label={lst:evtx-offline}]
+# Lire un fichier .evtx hors-ligne (Python avec python-evtx)
+python3 -m evtx /mnt/forensics/Windows/System32/winevt/Logs/Security.evtx | \
+  grep -A5 "EventID>4625"
+
+# Avec EvtxECmd (Eric Zimmermann) : extraction CSV
+EvtxECmd.exe \
+  -f "Security.evtx" \
+  --csv E:\output --csvf security_events.csv \
+  --inc 4624,4625,4648,4672,4720,4732,1102
+
+# Rechercher les créations de compte sur 24h autour de l'incident
+# Dans security_events.csv : EventId==4720, TimeCreated entre 02:00 et 06:00
+\end{lstlisting}
+
+% ==============================================================================
+\section{Forensique Linux}
+\label{sec:forensics-linux}
+% ==============================================================================
+
+\subsection{Système de fichiers ext4~: inodes et journalisation}
+
+\begin{boxdef}
+\textbf{Inode~:} Structure de données du système de fichiers ext4 contenant
+les métadonnées d'un fichier~: propriétaire, permissions, timestamps (atime,
+mtime, ctime), pointeurs vers les blocs de données. Le nom du fichier est
+stocké dans le répertoire, pas dans l'inode. Supprimer un fichier ne
+supprime pas immédiatement son inode ni ses données~: les blocs sont marqués
+libres mais leur contenu reste jusqu'à réallocation.
+\end{boxdef}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse des artefacts Linux depuis une image montée},
+  label={lst:linux-forensics}]
+# ─── Monter l'image en lecture seule ────────────────────────────────────────
+sudo mount -o ro,noatime /dev/loop0p1 /mnt/forensics/
+
+# ─── Informations sur un inode (stat) ────────────────────────────────────────
+stat /mnt/forensics/var/log/auth.log
+# Affiche : taille, inode, timestamps (Access, Modify, Change), type
+
+# ─── Lister les fichiers par date de modification (récents d'abord) ──────────
+find /mnt/forensics/ -newer /mnt/forensics/etc/passwd \
+  -type f 2>/dev/null | head -50
+# Fichiers modifiés après /etc/passwd (référence temporelle)
+
+# ─── Rechercher des fichiers SUID suspects (élévation de privilèges) ─────────
+find /mnt/forensics/ -perm -4000 -type f 2>/dev/null | sort
+# SUID légitime : /usr/bin/passwd, /usr/bin/sudo, etc.
+# SUID suspect : tout le reste
+
+# ─── Fichiers récemment modifiés dans des répertoires temporaires ─────────────
+find /mnt/forensics/tmp /mnt/forensics/var/tmp \
+  /mnt/forensics/dev/shm -type f -ls 2>/dev/null
+
+# ─── Rechercher des webshells (PHP dans le DocumentRoot) ─────────────────────
+find /mnt/forensics/var/www -name "*.php" \
+  -newer /mnt/forensics/etc/apache2/apache2.conf 2>/dev/null
+
+# Analyser le contenu des .php suspects
+grep -l "eval\|base64_decode\|system\|exec\|passthru" \
+  /mnt/forensics/var/www/html/*.php
+\end{lstlisting}
+
+\subsection{Artefacts d'exécution et de persistance Linux}
+
+\begin{table}[H]
+\centering\small
+\caption{Artefacts de persistance Linux à analyser}
+\label{tab:linux-persistance}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{5.5cm}p{8cm}}
+\toprule
+\tableauHeader{Artefact} & \tableauHeader{Analyse forensique} \\
+\midrule
+\texttt{\textasciitilde/.bash\_history} &
+Historique des commandes~; vérifier les commandes suspectes, les téléchargements,
+les connexions sortantes \\
+\texttt{/etc/cron.d/}, \texttt{/etc/crontab}, \texttt{/var/spool/cron/} &
+Tâches planifiées~; tout ajout non documenté est suspect (T1053.003) \\
+\texttt{/etc/rc.local}, \texttt{/etc/init.d/} &
+Scripts de démarrage (persistances classiques) \\
+Unités systemd (\texttt{/etc/systemd/system/*.service}) &
+Nouvelles unités créées après la date d'installation du système \\
+\texttt{/etc/ld.so.preload} &
+LD\_PRELOAD~: injection de bibliothèque au démarrage de tout processus.
+Technique de rootkit (T1574.006) \\
+\texttt{/proc/[PID]/} &
+État des processus en cours (cmdline, maps, net, fd) \\
+Clés SSH (\texttt{\textasciitilde/.ssh/authorized\_keys}) &
+Clés publiques ajoutées pour persistence SSH (T1098.004) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Détection des mécanismes de persistance Linux},
+  label={lst:linux-persistance}]
+# ─── Crontabs de tous les utilisateurs ───────────────────────────────────────
+for user in $(cut -f1 -d: /mnt/forensics/etc/passwd); do
+  crontab_file="/mnt/forensics/var/spool/cron/crontabs/$user"
+  [ -f "$crontab_file" ] && echo "=== $user ===" && cat "$crontab_file"
+done
+cat /mnt/forensics/etc/crontab
+ls -la /mnt/forensics/etc/cron.d/
+
+# ─── Services systemd non standards ─────────────────────────────────────────
+find /mnt/forensics/etc/systemd/system/ \
+  -name "*.service" -newer /mnt/forensics/etc/os-release | sort
+
+# ─── LD_PRELOAD (rootkit classique) ──────────────────────────────────────────
+cat /mnt/forensics/etc/ld.so.preload 2>/dev/null
+# Un fichier non vide et non documenté = rootkit probable
+
+# ─── Clés SSH autorisées (backdoors) ─────────────────────────────────────────
+find /mnt/forensics -name "authorized_keys" -type f | \
+  xargs -I{} sh -c 'echo "=== {} ==="; cat {}'
+
+# ─── Historique bash de tous les utilisateurs ────────────────────────────────
+find /mnt/forensics -name ".bash_history" | \
+  xargs -I{} sh -c 'echo "=== {} ==="; cat {}' | \
+  grep -E "wget|curl|nc |ncat|python|perl|ruby|base64"
+\end{lstlisting}
+
+% ==============================================================================
+\section{Récupération de fichiers supprimés}
+\label{sec:carving}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{File Carving~:} Récupération de fichiers supprimés en recherchant
+leurs signatures magiques (\textit{magic bytes}) dans l'espace non alloué
+ou le slack space, sans s'appuyer sur les métadonnées du système de fichiers.
+Fonctionne même si la MFT / les inodes ont été effacés.
+\end{boxdef}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Récupération de fichiers avec Scalpel et PhotoRec},
+  label={lst:file-carving}]
+# ─── Scalpel : carving depuis une image ──────────────────────────────────────
+# Configurer /etc/scalpel/scalpel.conf (activer les types recherchés)
+# Par défaut : pdf, doc, jpg, zip, etc.
+scalpel -c /etc/scalpel/scalpel.conf \
+        -o /mnt/recovery/scalpel/ \
+        srv-web-01-sda.dd
+
+# ─── PhotoRec (testdisk) : carving interactif ────────────────────────────────
+photorec /log /d /mnt/recovery/photorec/ srv-web-01-sda.dd
+
+# ─── bulk_extractor : extraction de patterns (emails, URLs, CC) ──────────────
+bulk_extractor -R -o /mnt/recovery/bulk_output/ \
+               -e net -e email -e url \
+               srv-web-01-sda.dd
+# Produit des rapports texte de toutes les URLs, emails, IPs trouvés
+# dans toute l'image, y compris l'espace non alloué.
+
+# ─── Récupération d'un fichier spécifique par inode (ext4) ───────────────────
+# Identifier l'inode du fichier supprimé
+debugfs /dev/loop0p1 -R "ls -ld /var/log/auth.log"
+# Extraire les blocs par inode
+icat -f ext4 srv-web-01-sda.dd 0 987654 > auth.log.recovered
+\end{lstlisting}
+
+% ==============================================================================
+\section{Autopsy~: analyse systématique}
+\label{sec:autopsy}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{Autopsy~:} Interface graphique open-source (Sleuth Kit Foundation)
+pour l'analyse forensique de disques~: navigation dans les systèmes de
+fichiers, récupération de fichiers supprimés, génération de timeline,
+carving, extraction de hash, rapport HTML. Standard en formation DFIR.
+\end{boxdef}
+
+Modules clés d'Autopsy~:
+\begin{itemize}
+  \item \textbf{Timeline Analysis~:} visualisation graphique de l'activité
+        fichier sur la fenêtre temporelle de l'incident.
+  \item \textbf{Keyword Search~:} recherche plein texte dans toute l'image.
+  \item \textbf{Hash Lookup~:} comparaison avec NSRL (fichiers système
+        légitimes) et bases de malwares connus.
+  \item \textbf{Recent Activity~:} extraction des historiques de navigation,
+        des documents récents, des téléchargements.
+  \item \textbf{Email~:} extraction et indexation des fichiers PST/MBOX.
+\end{itemize}
+
+% ==============================================================================
+\section*{Résumé}
+% ==============================================================================
+
+\begin{boxresume}
+\begin{itemize}
+  \item NTFS~: MFT, timestamps MACE, détection timestomping (E $\neq$ C/M/A).
+  \item Artefacts Windows~: registre (Run keys, SAM), Prefetch (preuves
+        d'exécution), LNK (preuves d'ouverture), Shellbags (navigation).
+  \item Linux~: inodes ext4, bash\_history, cron, systemd, LD\_PRELOAD,
+        authorized\_keys comme vecteurs de persistance.
+  \item File carving~: Scalpel, PhotoRec, bulk\_extractor pour récupérer
+        données supprimées.
+  \item Outils~: The Sleuth Kit (fls, mactime, icat), RegRipper, EZTools
+        (MFTECmd, PECmd, LECmd), Autopsy.
+  \item Toute analyse sur copie~; jamais sur original~; hash avant/après.
+\end{itemize}
+\end{boxresume}
+
+\begin{boxexo}
+\textbf{Ex.~6.1 — Analyse du registre.}
+À partir de l'image \texttt{srv-erp-01.dd} fournie (Lab~2), utilisez
+RegRipper pour identifier~: (a)~les clés Run présentes~;
+(b)~les comptes locaux dans la SAM~; (c)~le fuseau horaire configuré.
+Documentez chaque trouvaille avec sa clé de registre complète.
+
+\medskip\textbf{Ex.~6.2 — Timeline NTFS.}
+Avec \texttt{fls} et \texttt{mactime}, générez la timeline complète
+de \texttt{srv-web-01.dd} pour la plage 2026-04-12 02:00--06:00 UTC.
+Identifiez les 5~événements les plus suspects et annotez-les avec
+les TTPs MITRE correspondants.
+
+\medskip\textbf{Ex.~6.3 — Détection de persistance Linux.}
+Sur l'image Linux fournie, recherchez et documentez tous les mécanismes
+de persistance (cron, systemd, LD\_PRELOAD, authorized\_keys, bashrc).
+\end{boxexo}

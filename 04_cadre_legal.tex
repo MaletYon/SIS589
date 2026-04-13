@@ -1,0 +1,404 @@
+% ==============================================================================
+% 04_cadre_legal.tex — UE SIS589
+% ==============================================================================
+\chapter{Cadre Légal, Normatif et Admissibilité des Preuves Numériques}
+\label{chap:cadre-legal}
+
+\epigraph{\itshape « Une preuve mal collectée est une preuve perdue. »}
+         {--- Principe ACPO, \textit{Good Practice Guide for Digital Evidence}}
+
+\begin{boxobjectifs}
+\begin{enumerate}
+  \item Connaître les normes internationales structurant la réponse aux incidents
+        et l'investigation numérique (ISO~27035, ISO~27037, RFC~3227, NIST~SP~800-86).
+  \item Appliquer le cadre juridique camerounais (Loi~2010/012, Loi~2010/013)
+        aux situations professionnelles courantes.
+  \item Comprendre les conditions d'admissibilité des preuves numériques
+        devant les juridictions.
+  \item Identifier les obligations de notification et de coopération avec les
+        autorités (ANTIC, parquet).
+  \item Articuler le droit africain (Convention de Malabo) avec les pratiques
+        d'investigation.
+\end{enumerate}
+\end{boxobjectifs}
+
+% ==============================================================================
+\section{Normes internationales}
+\label{sec:normes-int}
+% ==============================================================================
+
+\subsection{ISO/IEC~27035~: Gestion des incidents de sécurité}
+
+\begin{boxdef}
+\textbf{ISO/IEC~27035~:} Norme internationale décrivant les principes et
+processus de gestion des incidents de sécurité de l'information. Structurée
+en trois parties~: (1)~principes, (2)~lignes directrices de planification et
+préparation, (3)~lignes directrices de réponse aux incidents.
+\end{boxdef}
+
+Le cycle ISO~27035 comprend cinq phases~:
+\begin{enumerate}
+  \item \textbf{Planification et préparation~:} politique de gestion des incidents,
+        constitution du CSIRT, formation.
+  \item \textbf{Détection et signalement~:} identification des événements,
+        qualification, escalade.
+  \item \textbf{Évaluation et décision~:} confirmation de l'incident, évaluation
+        de l'impact, décision de réponse.
+  \item \textbf{Réponse~:} confinement, éradication, rétablissement, investigation
+        forensique.
+  \item \textbf{Leçons tirées~:} RETEX, amélioration du dispositif.
+\end{enumerate}
+
+\subsection{ISO/IEC~27037~: Collecte de preuves numériques}
+
+\begin{boxdef}
+\textbf{ISO/IEC~27037~:} Lignes directrices pour l'identification, la collecte,
+l'acquisition et la préservation des preuves numériques. Applicable par les
+enquêteurs, les CSIRT et les équipes forensiques. Principe fondateur~:
+\textbf{l'intégrité de la preuve est prioritaire sur la rapidité de la collecte}.
+\end{boxdef}
+
+Quatre exigences fondamentales~:
+\begin{itemize}
+  \item \textbf{Admissibilité~:} la preuve peut être produite et acceptée
+        devant un tribunal.
+  \item \textbf{Authenticité~:} la preuve est ce qu'elle prétend être
+        (pas altérée, pas fabriquée).
+  \item \textbf{Complétude~:} toutes les preuves pertinentes ont été collectées.
+  \item \textbf{Fiabilité~:} les méthodes utilisées sont reproductibles et
+        documentées.
+\end{itemize}
+
+\subsection{RFC~3227~: Ordre de collecte des preuves}
+
+\begin{boxdef}
+\textbf{RFC~3227 (\textit{Guidelines for Evidence Collection and Archiving})~:}
+Document de meilleures pratiques (BCP~55) définissant l'ordre de collecte
+des preuves numériques en fonction de leur volatilité. Principe~: collecter
+d'abord ce qui disparaît le plus vite.
+\end{boxdef}
+
+\begin{table}[H]
+\centering\small
+\caption{Ordre de volatilité selon RFC~3227}
+\label{tab:ordre-volatilite}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{0.8cm}p{5cm}p{7cm}}
+\toprule
+\tableauHeader{\#} & \tableauHeader{Source} &
+\tableauHeader{Durée de vie / Remarque} \\
+\midrule
+1 & Registres CPU, cache L1/L2 & Quelques nanosecondes --- impossible à capturer \\
+2 & Mémoire vive (RAM) & Perdue à l'extinction. Dumper avant tout arrêt \\
+3 & État réseau (tables ARP, connexions) & Quelques secondes à minutes \\
+4 & Processus en cours & Durée de vie variable \\
+5 & Disque dur / SSD & Persistant mais modifiable (accès OS) \\
+6 & Journaux système distants & Semi-persistant (rotation) \\
+7 & Données hors-ligne (backups, archives) & Persistant \\
+8 & Configuration physique / topologie & Quasi-permanent \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{NIST SP~800-86~: Intégration de la forensique dans l'IR}
+
+\begin{boxdef}
+\textbf{NIST SP~800-86~:} Guide d'intégration des techniques forensiques
+dans le processus de réponse aux incidents. Définit quatre phases
+de l'investigation~: collecte, examen, analyse, rapport.
+\end{boxdef}
+
+\begin{table}[H]
+\centering\small
+\caption{Phases d'investigation selon NIST SP~800-86}
+\label{tab:nist-phases}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{2.5cm}p{5cm}p{6cm}}
+\toprule
+\tableauHeader{Phase} & \tableauHeader{Activités} &
+\tableauHeader{Livrables} \\
+\midrule
+Collecte &
+Identification et acquisition des preuves~: images disques, dumps RAM,
+captures réseau, journaux &
+PV de collecte, hashes d'intégrité \\
+Examen &
+Extraction des données pertinentes depuis les images~: fichiers, métadonnées,
+données supprimées &
+Fichiers extraits, liste d'artefacts \\
+Analyse &
+Reconstruction de la timeline, corrélation, identification des TTPs,
+attribution &
+Timeline annotée, rapport d'analyse \\
+Rapport &
+Documentation des découvertes, conclusions, recommandations,
+forme adaptée au destinataire &
+Rapport technique, résumé direction \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Principes ACPO}
+
+Les quatre principes ACPO (\textit{Association of Chief Police Officers},
+Royaume-Uni) sont devenus un standard de facto pour la collecte de
+preuves numériques~:
+
+\begin{enumerate}
+  \item \textbf{Principe~1~:} Aucune action ne doit modifier les données
+        sur un support qui pourrait être ultérieurement présenté en justice.
+  \item \textbf{Principe~2~:} Si une personne estime nécessaire d'accéder
+        aux données originales, cette personne doit être compétente pour
+        le faire et capable d'expliquer la pertinence et les implications
+        de ses actions.
+  \item \textbf{Principe~3~:} Une piste d'audit complète de toutes les
+        actions effectuées sur les preuves numériques doit être créée et
+        préservée.
+  \item \textbf{Principe~4~:} La personne responsable de l'investigation
+        est responsable du respect de ces principes.
+\end{enumerate}
+
+% ==============================================================================
+\section{Cadre juridique camerounais}
+\label{sec:droit-cameroun}
+% ==============================================================================
+
+\subsection{Loi n°~2010/012 relative à la cybersécurité et à la cybercriminalité}
+
+\begin{boxdef}
+\textbf{Loi~2010/012 du 21~décembre~2010~:} Texte fondateur du droit
+de la cybersécurité au Cameroun. Elle définit les infractions liées
+aux systèmes d'information, les obligations des opérateurs, les pouvoirs
+des enquêteurs et le cadre de la coopération internationale.
+\end{boxdef}
+
+\textbf{Infractions principales définies~:}
+\begin{itemize}
+  \item Accès frauduleux à un système d'information (Art.~62)~:
+        peine jusqu'à 2~ans d'emprisonnement et 5~millions~FCFA d'amende.
+  \item Maintien frauduleux dans un système (Art.~63).
+  \item Atteinte à l'intégrité d'un système ou de données (Art.~64--66).
+  \item Interception illégale de communications (Art.~67).
+  \item Falsification de données (Art.~68).
+\end{itemize}
+
+\textbf{Obligations des opérateurs (Art.~44--50)~:}
+\begin{itemize}
+  \item Conservation des données de connexion pendant une durée
+        déterminée par décret.
+  \item Coopération avec les autorités judiciaires sur réquisition.
+  \item Signalement des violations de données à l'ANTIC.
+\end{itemize}
+
+\textbf{Pouvoirs des enquêteurs~:}
+\begin{itemize}
+  \item Saisie de matériels informatiques sur autorisation judiciaire (Art.~83).
+  \item Accès aux données chiffrées~: obligation de remise des clés sur
+        réquisition (Art.~85).
+  \item Interception légale de communications électroniques (Art.~87--89),
+        sous contrôle du parquet.
+\end{itemize}
+
+\subsection{Loi n°~2010/013 régissant les communications électroniques}
+
+Cette loi complète la~2010/012 en définissant le cadre des opérateurs de
+télécommunications, les obligations de couverture, de confidentialité
+des communications et les droits des usagers.
+
+Elle est pertinente pour la cybersécurité dans son volet~: obligation de
+sécurisation des infrastructures (Art.~79), responsabilité des prestataires
+hébergeurs, et encadrement de l'interception légale.
+
+\subsection{L'ANTIC~: rôle et pouvoirs}
+
+\begin{boxdef}
+\textbf{ANTIC (\textit{Agence Nationale des Technologies de l'Information
+et de la Communication})~:} Autorité de régulation et de supervision de
+la cybersécurité au Cameroun. Ses missions incluent la certification des
+équipements cryptographiques, la surveillance des réseaux publics,
+le traitement des incidents de cybersécurité signalés et la coopération
+internationale.
+\end{boxdef}
+
+En cas d'incident, l'ANTIC peut~:
+\begin{itemize}
+  \item Être notifiée et intervenir techniquement.
+  \item Requérir la communication de journaux et données techniques.
+  \item Orienter les entreprises vers les autorités judiciaires compétentes.
+\end{itemize}
+
+% ==============================================================================
+\section{Convention de Malabo et cadre africain}
+\label{sec:malabo}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{Convention de l'Union Africaine sur la Cybersécurité et la Protection
+des Données Personnelles (Convention de Malabo, 2014)~:} Traité continental
+définissant un cadre harmonisé pour la cybersécurité, la cybercriminalité,
+la protection des données et les transactions électroniques en Afrique.
+Le Cameroun est signataire.
+\end{boxdef}
+
+Quatre axes principaux~:
+\begin{enumerate}
+  \item \textbf{Transactions électroniques~:} valeur juridique des documents
+        et signatures électroniques.
+  \item \textbf{Protection des données personnelles~:} droits des personnes,
+        obligations des responsables de traitement (parallèle au RGPD).
+  \item \textbf{Sécurité des SI~:} obligations de sécurisation, mécanismes
+        de certification, CSIRT nationaux.
+  \item \textbf{Cybercriminalité~:} incrimination des infractions
+        informatiques, coopération judiciaire transfrontalière.
+\end{enumerate}
+
+\begin{boiteRemarque}{Impact pratique pour les entreprises}
+La Convention de Malabo impose aux États membres de disposer d'une autorité
+nationale de protection des données et d'un CSIRT national. Pour les entreprises
+opérant dans plusieurs pays africains, elle constitue le socle de la
+coopération en cas d'incident transfrontalier.
+\end{boiteRemarque}
+
+% ==============================================================================
+\section{Admissibilité des preuves numériques}
+\label{sec:admissibilite}
+% ==============================================================================
+
+\subsection{Conditions générales d'admissibilité}
+
+Pour qu'une preuve numérique soit recevable devant une juridiction, elle
+doit satisfaire aux conditions suivantes~:
+
+\begin{description}
+  \item[Légalité de la collecte.] La preuve doit avoir été obtenue dans
+        le respect des droits (sans violation de vie privée non autorisée,
+        sans accès non autorisé). Une preuve obtenue illégalement est
+        irrecevable.
+  \item[Authenticité.] La preuve est ce qu'elle prétend être. Les hashes
+        cryptographiques (SHA-256) calculés au moment de la saisie,
+        conservés dans le PV de collecte, garantissent qu'elle n'a pas
+        été altérée.
+  \item[Intégrité.] La preuve n'a pas été modifiée depuis sa collecte.
+        La chaîne de custody documente chaque accès.
+  \item[Fiabilité de la méthode.} Les outils et méthodes utilisés sont
+        reconnus et documentés (FTK Imager, dd, Autopsy, Volatility).
+\end{description}
+
+\subsection{La chaîne de custody}
+
+\begin{boxdef}
+\textbf{Chaîne de custody (\textit{Chain of Custody})~:} Document traçant
+l'historique complet d'une pièce à conviction numérique depuis sa collecte
+initiale jusqu'à sa présentation en justice~: qui l'a manipulée, quand,
+pourquoi, et dans quel état elle se trouvait à chaque étape.
+Toute rupture de la chaîne fragilise l'admissibilité de la preuve.
+\end{boxdef}
+
+\begin{boxcustody}
+\textbf{Modèle de chaîne de custody --- LiZbiZ-SIS}
+
+\begin{itemize}
+  \item \textbf{Pièce~:} Image disque \texttt{srv-web-01-sda.dd}
+  \item \textbf{Date/heure de collecte~:} 12/04/2026, 04:22~UTC
+  \item \textbf{Collecteur~:} MINKA T.E., Analyste N2 SOC LiZbiZ
+  \item \textbf{Méthode~:} FTK Imager v4.7.1.2, copie bit à bit
+  \item \textbf{SHA-256~:} \hash{sha256}{3a7d4f8b...c2e91}
+  \item \textbf{Support de stockage~:} Disque externe chiffré
+        (\texttt{VeraCrypt}, SN: XYZ-20260412)
+  \item \textbf{Conservation~:} Coffre-fort salle serveur LiZbiZ,
+        scellé n°~2026-04-001
+  \item \textbf{Accès ultérieur~:} 14/04/2026, 09:00~UTC ---
+        Expertise judiciaire, tribunal de Yaoundé, juge FOFANA
+\end{itemize}
+\end{boxcustody}
+
+\subsection{Valeur probatoire des logs SIEM}
+
+Un journal exporté en temps réel vers un SIEM tiers dispose d'une valeur
+probatoire plus forte qu'un journal stocké localement, car~:
+\begin{itemize}
+  \item L'horodatage est fourni par le serveur SIEM (externe à la machine
+        compromise), difficile à falsifier rétrospectivement.
+  \item L'intégrité de la transmission peut être attestée par les
+        certificats TLS et les logs du collecteur.
+  \item Le SIEM constitue un tiers de confiance opérationnel.
+\end{itemize}
+
+% ==============================================================================
+\section{Obligations de notification}
+\label{sec:notification}
+% ==============================================================================
+
+\begin{table}[H]
+\centering\small
+\caption{Délais et destinataires de notification selon les référentiels}
+\label{tab:notification}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4cm}p{2.5cm}p{3cm}p{4cm}}
+\toprule
+\tableauHeader{Référentiel} & \tableauHeader{Délai} &
+\tableauHeader{Destinataire} & \tableauHeader{Périmètre} \\
+\midrule
+RGPD Art.~33 (UE) & 72~heures & Autorité de contrôle (CNIL) &
+Violation données personnelles \\
+Directive NIS2 (UE) & 24h (alerte) + 72h (rapport) & CSIRT national + ENISA &
+Opérateurs services essentiels \\
+Loi~2010/012 Cameroun & Non précisé & ANTIC, parquet & Incidents majeurs \\
+PCI-DSS (Art.~12.10) & Immédiat & Banques acquéreuses & Compromission données cartes \\
+ISO~27035 & Défini par politique interne & CSIRT interne, management & Tous incidents confirmés \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{boxlizbiz}
+\textbf{LiZbiZ-SIS~: obligations applicables}
+
+LiZbiZ-SIS traite des données de paiement mobile money (MTN MoMo,
+Orange Money)~: elle est soumise aux exigences PCI-DSS si elle stocke,
+traite ou transmet des données de cartes. Elle est également soumise à
+la Loi~2010/012 pour la conservation des journaux de connexion et la
+coopération avec l'ANTIC. En cas de fuite de données clients, elle doit
+notifier l'ANTIC sans délai injustifié, documenter la violation et
+prendre les mesures de remédiation immédiates.
+\end{boxlizbiz}
+
+% ==============================================================================
+\section*{Résumé}
+% ==============================================================================
+
+\begin{boxresume}
+\begin{itemize}
+  \item ISO~27035~: cycle de gestion des incidents en 5~phases.
+        ISO~27037~: collecte de preuves (admissibilité, authenticité,
+        complétude, fiabilité).
+  \item RFC~3227~: ordre de volatilité (RAM~$\to$~disque~$\to$~archives).
+        NIST~SP~800-86~: collecte, examen, analyse, rapport.
+  \item Principes ACPO~: ne pas altérer les données originales~;
+        documenter tout accès~; maintenir la chaîne de custody.
+  \item Loi~2010/012~: infractions informatiques, pouvoirs des
+        enquêteurs, obligations des opérateurs. ANTIC~: autorité compétente.
+  \item Convention de Malabo~: cadre africain harmonisé (données
+        personnelles, cybercriminalité, coopération transfrontalière).
+  \item Chaîne de custody~: traçabilité complète de la preuve.
+        Logs SIEM distants~: valeur probatoire supérieure.
+\end{itemize}
+\end{boxresume}
+
+\begin{boxexo}
+\textbf{Ex.~4.1 — Qualification juridique.}
+Un technicien LiZbiZ découvre que son collègue a accédé à la base de
+données clients en dehors de ses attributions pour exporter 50~000 dossiers.
+Qualifiez les infractions potentielles selon la Loi~2010/012. Quelles
+preuves faut-il collecter~? Quel est le délai pour notifier l'ANTIC~?
+
+\medskip\textbf{Ex.~4.2 — Chaîne de custody.}
+Vous devez saisir un laptop Windows suspect sur le bureau d'un employé.
+Rédigez le PV de saisie complet (contexte, méthode, hashes, stockage)
+en appliquant les principes ACPO et ISO~27037.
+
+\medskip\textbf{Ex.~4.3 — Politique de rétention.}
+LiZbiZ-SIS est en négociation avec un client nigérian et un client
+ivoirien. Identifiez les référentiels applicables à chacun et proposez
+une politique de rétention unifiée compatible avec les trois juridictions
+(Cameroun, Nigeria, Côte d'Ivoire).
+\end{boxexo}

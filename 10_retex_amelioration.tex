@@ -1,0 +1,372 @@
+% ==============================================================================
+% 10_retex_amelioration.tex — UE SIS589
+% ==============================================================================
+\chapter{Retour d'Expérience et Amélioration Continue}
+\label{chap:retex}
+
+\epigraph{\itshape « Un incident mal analysé est un incident
+  qui se répétera. »}
+         {--- Principe du RETEX opérationnel}
+
+\begin{boxobjectifs}
+\begin{enumerate}
+  \item Structurer et conduire un RETEX post-incident en distinguant
+        analyse des causes et recommandations.
+  \item Appliquer le cycle d'amélioration continue (PDCA) à la sécurité
+        opérationnelle.
+  \item Définir et calculer les métriques SOC de performance à long terme.
+  \item Comprendre le principe et la valeur des exercices Purple Team.
+  \item Rédiger un plan de remédiation priorisé exploitable par le management.
+\end{enumerate}
+\end{boxobjectifs}
+
+% ==============================================================================
+\section{Le RETEX~: structure et méthode}
+\label{sec:retex}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{RETEX (Retour d'Expérience)~:} Processus structuré d'analyse
+postérieure à un incident, visant à comprendre les causes profondes
+(non seulement les symptômes), à documenter les leçons apprises et à
+produire des recommandations actionnables pour éviter la récidive et
+améliorer le dispositif de détection et de réponse.
+\end{boxdef}
+
+Le RETEX n'est pas un tribunal. Son objectif est la compréhension et
+l'amélioration, pas la désignation d'un coupable. Un RETEX conduit dans
+un climat de culpabilisation sera incomplet (les acteurs minimisent leurs
+erreurs) et contre-productif.
+
+\subsection{Structure d'un RETEX}
+
+Un RETEX complet comporte six sections~:
+
+\begin{enumerate}
+  \item \textbf{Contexte et chronologie.}
+        Résumé de l'incident~: type, dates, systèmes affectés, durée.
+        Timeline consolidée (cf. chapitre~2).
+  \item \textbf{Analyse des causes profondes (\textit{Root Cause Analysis}).}
+        Identification des causes techniques, organisationnelles et
+        humaines. Utilisation de la méthode des \og{}5~Pourquoi\fg{} ou
+        du diagramme d'Ishikawa.
+  \item \textbf{Analyse de la détection.}
+        Pourquoi l'incident n'a-t-il pas été détecté plus tôt~?
+        Quelles règles manquaient~? Quels journaux n'étaient pas collectés~?
+        Le FPR était-il trop élevé~?
+  \item \textbf{Analyse de la réponse.}
+        La réponse a-t-elle été conforme aux playbooks~?
+        Les délais SLA ont-ils été respectés~?
+        Les outils étaient-ils disponibles et opérationnels~?
+  \item \textbf{Recommandations.}
+        Actions correctives priorisées (court, moyen, long terme)
+        avec responsable, délai et indicateur de vérification.
+  \item \textbf{Validation et capitalisation.}
+        Validation des recommandations par le management~;
+        intégration dans la documentation (playbooks, règles SIEM,
+        politique de sécurité).
+\end{enumerate}
+
+\subsection{Analyse des causes profondes}
+
+La méthode des \textbf{5~Pourquoi} est la plus accessible pour les
+incidents de sécurité~:
+
+\begin{table}[H]
+\centering\small
+\caption{Méthode 5~Pourquoi appliquée à l'incident LiZbiZ-SIS}
+\label{tab:5pourquoi}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{1cm}p{5.5cm}p{7cm}}
+\toprule
+\tableauHeader{\#} & \tableauHeader{Question} & \tableauHeader{Réponse} \\
+\midrule
+1 & Pourquoi l'attaquant a-t-il réussi à accéder au serveur~? &
+Le compte \texttt{backup} avait un mot de passe faible \\
+2 & Pourquoi ce compte avait-il un mot de passe faible~? &
+La politique de mot de passe ne couvrait pas les comptes de service \\
+3 & Pourquoi la politique ne les couvrait-elle pas~? &
+La PSSI n'avait pas été mise à jour depuis 3~ans \\
+4 & Pourquoi la PSSI n'a-t-elle pas été mise à jour~? &
+Aucun processus de revue annuelle n'était formalisé \\
+5 & Pourquoi n'y avait-il pas de processus de revue~? &
+Absence de rôle RSSI à temps plein dans l'organisation \\
+\midrule
+\multicolumn{2}{l}{\textbf{Cause racine~:}} &
+Absence de gouvernance sécurité formelle (pas de RSSI, PSSI obsolète) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+\section{Le cycle PDCA appliqué à la sécurité opérationnelle}
+\label{sec:pdca}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{PDCA (\textit{Plan-Do-Check-Act})~:} Cycle d'amélioration continue
+(Deming) appliqué à la sécurité opérationnelle. Chaque incident,
+chaque exercice, chaque revue de métriques est une occasion de
+progresser dans le cycle.
+\end{boxdef}
+
+Application au contexte SOC~:
+
+\begin{description}
+  \item[\textbf{Plan (Planifier)~:}] Définir les objectifs de sécurité~;
+        identifier les risques prioritaires~; planifier les améliorations
+        issues du RETEX~; mettre à jour les playbooks.
+  \item[\textbf{Do (Faire)~:}] Déployer les améliorations~:
+        nouvelles règles SIEM, formations, patches, durcissement.
+  \item[\textbf{Check (Vérifier)~:}] Mesurer l'efficacité des améliorations~:
+        métriques SOC (MTTD, MTTR, FPR), tests de pénétration, Purple Team.
+  \item[\textbf{Act (Agir)~:}] Corriger ce qui ne fonctionne pas~;
+        capitaliser ce qui fonctionne~; démarrer un nouveau cycle.
+\end{description}
+
+% ==============================================================================
+\section{Métriques de performance à long terme}
+\label{sec:metriques-lt}
+% ==============================================================================
+
+Au-delà des métriques opérationnelles immédiates (MTTD, MTTR,
+chapitres~1 et~8), l'amélioration continue requiert des indicateurs
+de progression à moyen terme~:
+
+\begin{table}[H]
+\centering\small
+\caption{Métriques de performance SOC à long terme}
+\label{tab:metriques-lt}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4.5cm}p{4cm}p{5cm}}
+\toprule
+\tableauHeader{Métrique} & \tableauHeader{Formule / Mesure} &
+\tableauHeader{Objectif et interprétation} \\
+\midrule
+Taux de détection &
+$\frac{\text{incidents détectés}}{\text{incidents totaux}} \times 100$ &
+Mesure la couverture réelle~; augmenter vers 100\% \\
+Couverture ATT\&CK &
+$\frac{\text{techniques couvertes}}{\text{techniques totales}} \times 100$ &
+Mesurer par tactique~; prioriser les angles morts \\
+Réduction du MTTD &
+$\text{MTTD}_n - \text{MTTD}_{n-1}$ &
+Tendance décroissante = amélioration \\
+Réduction du FPR &
+$\frac{\text{FP}}{\text{alertes totales}}$ par période &
+Tendance décroissante = règles mieux calibrées \\
+Taux de récidive &
+Incidents du même type sur 12~mois &
+0 = recommandations RETEX bien appliquées \\
+Couverture de logging &
+$\frac{\text{sources actives}}{\text{sources cibles}}$ &
+Mesure les angles morts de collecte \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Ces métriques doivent être calculées sur des périodes comparables
+(mensuel, trimestriel) et présentées en tendance, pas en valeur
+absolue. Un tableau de bord SOC complet est mis à jour mensuellement
+et présenté au RSSI et à la direction.
+
+% ==============================================================================
+\section{Le Purple Team}
+\label{sec:purple-team}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{Red Team~:} Équipe offensive qui simule un attaquant réel pour
+tester les défenses de l'organisation. Cherche à atteindre des objectifs
+définis (accès à la base de données clients, élévation de privilèges
+sur l'AD) en utilisant les mêmes TTPs qu'un vrai attaquant.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{Blue Team~:} Équipe défensive~: le SOC. Détecte, analyse et
+répond aux actions du Red Team (et aux vrais incidents).
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{Purple Team~:} Mode collaboratif Red Team + Blue Team, opérant
+\textbf{ensemble} pour maximiser la valeur de l'exercice. Le Red Team
+exécute une technique~; le Blue Team vérifie s'il l'a détectée~; si non,
+ils analysent ensemble pourquoi et corrigent la règle ou la source de
+logs manquante. L'objectif est l'amélioration de la détection,
+pas la démonstration de compétences offensives.
+\end{boxdef}
+
+\subsection{Déroulement d'un exercice Purple Team}
+
+\begin{enumerate}
+  \item \textbf{Planification.} Sélectionner les TTPs à tester
+        (priorité~: angles morts de la couverture ATT\&CK).
+        Définir le périmètre, les systèmes cibles, la fenêtre temporelle.
+  \item \textbf{Exécution.} Le Red Team exécute la technique choisie.
+        Le Blue Team surveille en temps réel.
+  \item \textbf{Vérification.} Les deux équipes confrontent leurs
+        observations~: l'alerte a-t-elle été générée~?
+        Dans quel délai~? Était-elle actionnable~?
+  \item \textbf{Remédiation.} Si la technique n'a pas été détectée~:
+        identifier la source de logs manquante ou la règle à créer.
+        Créer la règle. Re-tester immédiatement.
+  \item \textbf{Documentation.} Chaque TTP testé est documenté dans
+        le registre de couverture ATT\&CK avec le résultat~:
+        Détecté / Non détecté / Partiellement détecté.
+\end{enumerate}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Exemple de scénario Purple Team --- T1003.001 LSASS Dumping},
+  label={lst:purple-team}]
+# ─── RED TEAM : Dumper les credentials depuis LSASS ─────────────────────────
+# (sur une machine de test en lab, avec autorisation explicite)
+# Méthode 1 : Task Manager (GUI) — clic droit sur lsass.exe > Create Dump File
+# Méthode 2 : procdump (Sysinternals)
+procdump.exe -ma lsass.exe C:\Temp\lsass.dmp
+
+# Méthode 3 : comsvcs.dll (LOLBin, T1218)
+rundll32.exe C:\Windows\System32\comsvcs.dll MiniDump \
+  (Get-Process lsass).id C:\Temp\lsass.dmp full
+
+# ─── BLUE TEAM : Vérification de la détection ────────────────────────────────
+# Question 1 : Wazuh / Sysmon a-t-il généré une alerte ?
+# Chercher dans Kibana :
+event.code: "10"       # Sysmon EID 10 : ProcessAccess sur LSASS
+  AND winlog.event_data.TargetImage: "*lsass*"
+
+# Question 2 : L'accès à LSASS est-il loggué en Event ID 4656 ?
+event.code: "4656" AND winlog.event_data.ObjectName: "*lsass*"
+
+# ─── SI NON DÉTECTÉ : remédiation immédiate ──────────────────────────────────
+# Activer Sysmon EID 10 dans sysmonconfig.xml
+# <ProcessAccess onmatch="include">
+#   <TargetImage condition="end with">lsass.exe</TargetImage>
+# </ProcessAccess>
+
+# Ajouter règle Wazuh pour EID 10 + LSASS
+# Re-tester : la même technique doit maintenant générer une alerte
+
+# ─── DOCUMENTER le résultat ──────────────────────────────────────────────────
+echo "T1003.001 | 2026-04-20 | Non détecté | Sysmon EID10 absent | Corrigé 2026-04-20 | Re-testé OK" \
+  >> /var/log/purple_team_registry.csv
+\end{lstlisting}
+
+% ==============================================================================
+\section{Plan de remédiation priorisé}
+\label{sec:plan-remediation}
+% ==============================================================================
+
+Le RETEX produit des recommandations qui doivent être transformées
+en plan d'actions opérationnel. Le plan de remédiation répond aux
+questions~: quoi faire, dans quel ordre, par qui, pour quand,
+comment vérifier.
+
+\subsection{Priorisation}
+
+La priorisation des actions repose sur deux axes~:
+\begin{itemize}
+  \item \textbf{Impact~:} réduction du risque résiduel si l'action est
+        implémentée (critique, haute, moyenne, basse).
+  \item \textbf{Effort~:} coût d'implémentation (humain, financier,
+        délai). Une action à fort impact et faible effort est
+        une \og{}quick win\fg{} à traiter en priorité.
+\end{itemize}
+
+\begin{table}[H]
+\centering\small
+\caption{Plan de remédiation post-incident LiZbiZ-SIS (extrait)}
+\label{tab:plan-remediation}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4cm}p{2cm}p{2cm}p{2cm}p{3.5cm}}
+\toprule
+\tableauHeader{Action} & \tableauHeader{Impact} &
+\tableauHeader{Effort} & \tableauHeader{Délai} &
+\tableauHeader{Indicateur de vérification} \\
+\midrule
+Activer MFA sur tous les accès SSH & \gravite{critique} & Faible &
+J+7 & Rapport d'audit SSH \\
+Segmenter le réseau backup & \gravite{haute} & Moyen &
+J+30 & Test de pénétration \\
+Désactiver les comptes de service inutilisés & \gravite{haute} & Faible &
+J+15 & Revue AD mensuelle \\
+Déployer Sysmon sur tous les serveurs & \gravite{haute} & Faible &
+J+14 & Couverture agent Wazuh 100\% \\
+Mettre à jour la PSSI + politique MDP & \gravite{moyenne} & Élevé &
+J+90 & Validation direction + diffusion \\
+Former les équipes IT à l'IR & \gravite{moyenne} & Moyen &
+J+60 & Attestation de formation \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Suivi et gouvernance}
+
+Le plan de remédiation doit être suivi~:
+\begin{itemize}
+  \item Revue mensuelle des actions en cours avec le RSSI.
+  \item Rapport trimestriel à la direction (état d'avancement,
+        métriques SOC, incidents survenus).
+  \item Revue annuelle de la PSSI et des playbooks.
+  \item Test annuel du plan de continuité d'activité.
+\end{itemize}
+
+\begin{boxlizbiz}
+\textbf{LiZbiZ-SIS~: RETEX de l'incident du 12/04/2026}
+
+\textbf{Cause racine~:} Absence de gouvernance sécurité (PSSI obsolète,
+pas de RSSI, politique de mots de passe incomplète).
+
+\textbf{Facteurs contributifs~:} MTTD $>$ 21~jours (aucun SIEM)~;
+compte de service avec mot de passe faible non couvert par la politique~;
+absence de monitoring SSH nocturne~; pas de segmentation du réseau backup.
+
+\textbf{Bonnes pratiques observées~:} Les journaux du firewall pfSense
+étaient conservés 90~jours et ont permis la reconstruction de la
+timeline~; les backups n'ont pas été chiffrés (pas de ransomware).
+
+\textbf{5~recommandations prioritaires~:} (1)~MFA sur tous les accès
+distants~; (2)~Déploiement Wazuh + ELK immédiat~; (3)~Désactivation
+des comptes de service inactifs~; (4)~Politique de mot de passe
+couvrant tous les comptes (humains ET services)~;
+(5)~Nomination d'un RSSI (même à temps partiel).
+\end{boxlizbiz}
+
+% ==============================================================================
+\section*{Résumé}
+% ==============================================================================
+
+\begin{boxresume}
+\begin{itemize}
+  \item RETEX~: 6~sections (contexte, causes profondes, détection,
+        réponse, recommandations, capitalisation). Méthode 5~Pourquoi
+        pour la cause racine.
+  \item PDCA appliqué au SOC~: Plan~$\to$~Do~$\to$~Check~$\to$~Act.
+        Chaque incident alimente le cycle.
+  \item Métriques à long terme~: taux de détection, couverture ATT\&CK,
+        évolution MTTD/MTTR, taux de récidive.
+  \item Purple Team~: collaboration Red + Blue pour améliorer la détection
+        TTP par TTP. Documenter chaque test dans le registre de couverture.
+  \item Plan de remédiation~: prioriser sur impact $\times$ effort.
+        Quick wins en premier, gouvernance en parallèle.
+\end{itemize}
+\end{boxresume}
+
+\begin{boxexo}
+\textbf{Ex.~10.1 — RETEX structuré.}
+Rédigez le RETEX complet de l'incident LiZbiZ-SIS du 12/04/2026
+en suivant les 6~sections du modèle. La section causes profondes
+doit utiliser les 5~Pourquoi. La section recommandations doit
+contenir au moins 6~actions priorisées.
+
+\medskip\textbf{Ex.~10.2 — Tableau de couverture ATT\&CK.}
+Pour les 7~techniques MITRE identifiées dans l'incident
+(tableau~\ref{tab:mitre-mapping}), remplissez un tableau de couverture~:
+technique, source de log requise, règle SIEM existante (oui/non),
+action si non existante.
+
+\medskip\textbf{Ex.~10.3 — Scénario Purple Team.}
+Planifiez un exercice Purple Team pour tester 3~techniques choisies
+dans les angles morts de la couverture ATT\&CK de LiZbiZ-SIS~:
+description de l'attaque simulée, source de log attendue, règle SIEM
+à créer ou vérifier.
+\end{boxexo}

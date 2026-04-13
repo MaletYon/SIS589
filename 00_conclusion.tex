@@ -1,0 +1,87 @@
+% ==============================================================================
+% 00_conclusion.tex — UE SIS589
+% ==============================================================================
+\chapter*{Conclusion Générale}
+\addcontentsline{toc}{chapter}{Conclusion Générale}
+\label{chap:conclusion}
+
+% ==============================================================================
+\section*{Ce que vous avez construit}
+% ==============================================================================
+
+Au terme de ce cours, LiZbiZ-SIS n'est plus l'organisation aveugle du
+chapitre d'introduction. Depuis le niveau~1 de maturité SOC — aucun
+SIEM, aucune visibilité, un MTTD supérieur à trois semaines — vous avez
+construit, brique par brique, une capacité de supervision opérationnelle~:
+des journaux collectés en temps réel, des règles de corrélation mappées
+sur MITRE ATT\&CK, une architecture de détection en profondeur (NIDS
+périmétrique, HIDS sur chaque hôte, EDR en test), des playbooks rédigés,
+une procédure d'acquisition forensique conforme à ISO~27037, et un
+processus de réponse aux incidents ancré dans le droit camerounais.
+
+Ce n'est pas un état final. C'est le niveau~3 d'un parcours qui continue.
+
+% ==============================================================================
+\section*{Les trois convictions de ce cours}
+% ==============================================================================
+
+\textbf{Première conviction~:} la sécurité opérationnelle est une
+discipline de rigueur documentaire autant que de compétence technique.
+Un dump mémoire sans PV de collecte est inutilisable en justice.
+Une alerte sans ticket traçable ne sert à rien. Un incident sans RETEX
+se répétera. La forme n'est pas du formalisme~: c'est la condition
+de l'efficacité.
+
+\textbf{Deuxième conviction~:} le contexte africain et camerounais
+n'est pas un handicap à compenser, c'est un environnement à maîtriser.
+La Loi~2010/012, la Convention de Malabo, les spécificités des opérateurs
+mobile money, la réalité des infrastructures hybrides cloud et on-premise~:
+tout cela définit le terrain réel sur lequel vous opérerez. Les outils
+sont globaux~; le contexte d'application est local.
+
+\textbf{Troisième conviction~:} les outils open-source (Wazuh, ELK,
+Volatility, The Sleuth Kit, Autopsy, MISP) permettent de construire
+des capacités défensives de niveau professionnel avec des budgets
+d'organisation de taille intermédiaire. La contrainte budgétaire ne
+justifie pas l'absence de supervision. Elle impose la créativité
+et la priorisation.
+
+% ==============================================================================
+\section*{La suite}
+% ==============================================================================
+
+SIS589 vous a donné les fondamentaux. La maîtrise vient avec la pratique
+continue~:
+
+\begin{itemize}
+  \item \textbf{Certifications de référence~:} CompTIA Security+,
+        GIAC GCFE / GCIH / GREM (SANS Institute), eJPT / eCDFP (eLearnSecurity),
+        certifications ISACA (CISA, CISM, CRISC).
+  \item \textbf{Plateformes de pratique~:} TryHackMe (Blue Team Labs),
+        CyberDefenders, LetsDefend, Boss of the SOC (Splunk).
+  \item \textbf{Ressources~:} SANS Reading Room, DFIR.training,
+        MITRE ATT\&CK navigator, Elastic Security Labs,
+        Mandiant M-Trends annual report.
+  \item \textbf{Communauté~:} CERT-MU (Cameroun), AfricaCERT,
+        FIRST (Forum of Incident Response and Security Teams),
+        groupes ISACA Afrique centrale.
+\end{itemize}
+
+\begin{boxresume}
+\textbf{L'essentiel~:} les attaquants s'adaptent en permanence.
+La veille, la formation continue et la pratique sur cas réels ne
+sont pas des options~; elles sont la définition même du métier
+d'analyste SOC ou d'investigateur numérique. Un SOC qui ne s'améliore
+pas régresse.
+\end{boxresume}
+
+\vspace{3ex}
+\begin{center}
+  {\color{CouleurAccent}\rule{0.55\linewidth}{1pt}}\\[1ex]
+  {\small\itshape\color{CouleurPrimaire}
+    Rédigé avec la conviction que la maîtrise du numérique\\
+    est une responsabilité collective autant qu'individuelle.}\\[0.7ex]
+  {\small\bfseries\color{CouleurPrimaire}\auteurcours}\\
+  {\footnotesize\color{CouleurBordInfo}\itshape
+    \institutionprimaire{} --- \anneescolaire}
+\end{center}

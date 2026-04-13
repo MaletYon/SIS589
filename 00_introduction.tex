@@ -1,0 +1,152 @@
+% ==============================================================================
+% 00_introduction.tex — UE SIS589
+% ==============================================================================
+\chapter*{Introduction Générale}
+\addcontentsline{toc}{chapter}{Introduction Générale}
+\label{chap:intro}
+
+\epigraph{%
+  \itshape « La sécurité n'est pas un produit que l'on achète~;
+  c'est un processus que l'on construit. »
+}{--- Bruce Schneier}
+
+% ── Contexte ──────────────────────────────────────────────────────────────────
+\section*{Contexte et enjeux}
+
+Le paysage des menaces informatiques a radicalement évolué au cours de la dernière
+décennie. Les attaques ne ciblent plus seulement les grandes entreprises
+occidentales~: les PME, les administrations publiques, les opérateurs de
+télécommunications et les institutions financières d'Afrique centrale sont
+désormais exposés aux mêmes vecteurs — rançongiciels, compromission de
+comptes privilégiés, exfiltration de données, fraude au virement.
+
+Au Cameroun, la loi n°~2010/012 relative à la cybersécurité et à la
+cybercriminalité confère à l'ANTIC des prérogatives élargies~; elle impose
+aux opérateurs et aux entreprises des obligations de déclaration d'incidents
+et de conservation des traces numériques. La Convention de Malabo (Union
+africaine, 2014) renforce ce cadre à l'échelle continentale. Ces textes ne
+sont plus seulement des contraintes formelles~: ils définissent la frontière
+entre la faute professionnelle et la bonne foi prouvée par les journaux.
+
+Dans ce contexte, la maîtrise de la supervision, de l'investigation numérique
+et de la réponse aux incidents est devenue une compétence cardinale pour
+tout ingénieur en sécurité des systèmes d'information.
+
+% ── Positionnement du cours ───────────────────────────────────────────────────
+\section*{Positionnement de l'UE SIS589}
+
+\begin{boxinfo}
+\textbf{Prérequis recommandés~:}
+\begin{itemize}
+  \item Réseaux informatiques~: TCP/IP, firewalls, VLAN, protocoles applicatifs.
+  \item Administration Linux et Windows au niveau opérationnel.
+  \item Cours d'Audit des SI (GES4062) et/ou de Hacking Éthique (SEC4062)
+        appréciés en préalable.
+  \item Notions de droit numérique~: responsabilité civile, cybercriminalité.
+\end{itemize}
+\end{boxinfo}
+
+SIS589 est le maillon \textbf{opérationnel} de la chaîne de compétences en
+sécurité. Là où GES4062 enseigne à identifier et qualifier les risques, et
+où SEC4062 enseigne à simuler les attaques, SIS589 enseigne à
+\textbf{détecter, investiguer et maîtriser} ce qui survient en temps réel.
+
+Le cours est structuré en quatre parties~:
+
+\begin{enumerate}
+  \item \textbf{Supervision et détection~:} Architecture SOC, SIEM, journaux,
+        systèmes de détection d'intrusion.
+  \item \textbf{Cadre légal et normatif~:} Standards internationaux, droit
+        camerounais, admissibilité des preuves numériques.
+  \item \textbf{Investigation numérique (forensics)~:} Principes, artefacts
+        système, mémoire vive, trafic réseau, cloud.
+  \item \textbf{Réponse aux incidents et amélioration continue~:} Cycle
+        ISO~27035, CSIRT, threat intelligence, RETEX.
+\end{enumerate}
+
+Trois laboratoires immersifs sur environnement simulé (Wazuh + GNS3/EVE-NG)
+complètent le parcours théorique.
+
+% ── Le cas fil rouge ──────────────────────────────────────────────────────────
+\section*{Le cas fil rouge~: LiZbiZ-SIS}
+
+\begin{boxlizbiz}
+\textbf{Présentation de LiZbiZ-SIS}
+
+LiZbiZ-SIS est l'extension sécurité de l'entreprise LiZbiZ introduite dans
+les cours GES4062 et SEC4062. C'est une PME e-commerce et logistique
+camerounaise de 120~employés, dont l'infrastructure comprend~:
+
+\begin{itemize}
+  \item \textbf{VLAN~10 (DMZ)~:} Serveur Web Apache, reverse proxy Nginx,
+        accessible depuis Internet.
+  \item \textbf{VLAN~20 (Applicatif)~:} Serveur ERP, base de données MySQL,
+        serveur de messagerie.
+  \item \textbf{VLAN~30 (Utilisateurs)~:} 80~postes Windows~10,
+        Active Directory (Windows Server~2022).
+  \item \textbf{VLAN~40 (IoT Logistique)~:} Scanners codes-barres,
+        terminaux mobiles.
+  \item \textbf{Réseau d'administration~:} Firewall pfSense, switch manageable,
+        serveur de supervision.
+\end{itemize}
+
+LiZbiZ-SIS traite quotidiennement des données personnelles de clients
+(noms, adresses, historiques de commandes, transactions mobile money).
+Sa surface d'exposition est réelle~: serveur web Internet-facing,
+intégration Orange Money / MTN MoMo, connexions VPN avec des partenaires
+logistiques.
+
+À l'ouverture du cours~: aucun SOC, aucun SIEM, journaux conservés
+7~jours localement, équipe de 2~techniciens. Une récente alerte de la
+banque partenaire sur des transactions suspectes a révélé une intrusion
+remontant à plusieurs semaines~: le MTTD réel était supérieur à 21~jours.
+\end{boxlizbiz}
+
+Ce scénario initial — malheureusement banal — motive l'intégralité du
+parcours pédagogique. Chaque chapitre apportera un élément de réponse
+concret à la question~: \textit{comment LiZbiZ-SIS peut-elle détecter,
+comprendre et maîtriser une telle compromission, aujourd'hui et à l'avenir~?}
+
+% ── Organisation pratique ────────────────────────────────────────────────────
+\section*{Organisation pratique}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Organisation du cours SIS589}
+\label{tab:orga-cours}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{2.5cm}p{4cm}p{7cm}}
+\toprule
+\tableauHeader{Partie} & \tableauHeader{Chapitres} &
+\tableauHeader{Compétences visées} \\
+\midrule
+Supervision & Ch.~1--3 & Architecturer un SOC, configurer un SIEM,
+                          déployer des IDS/IPS \\
+Cadre légal & Ch.~4 & Appliquer les normes et le droit applicable \\
+Forensics & Ch.~5--7 & Acquérir, préserver et analyser des preuves
+                        numériques \\
+IR \& Amélioration & Ch.~8--10 & Piloter la réponse à incident, exploiter
+                                   la CTI, capitaliser \\
+Évaluation & Ch.~11 & Certifier les acquis \\
+\midrule
+Labs (3) & Lab~1--3 & SIEM, forensics disque, simulation Tabletop \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{boxresume}
+\textbf{Ce que vous saurez faire à l'issue de SIS589~:}
+\begin{itemize}
+  \item Déployer et opérer un SOC minimal (Wazuh + ELK) adapté à une
+        organisation de taille intermédiaire.
+  \item Lire, corréler et interpréter des journaux hétérogènes pour
+        reconstruire la chronologie d'une attaque.
+  \item Acquérir une image disque légalement admissible, en extraire les
+        artefacts forensiques pertinents.
+  \item Piloter la réponse à un incident selon la norme ISO~27035,
+        rédiger un rapport de post-mortem.
+  \item Opérer dans le cadre juridique camerounais et international,
+        produire des preuves recevables en justice.
+\end{itemize}
+\end{boxresume}

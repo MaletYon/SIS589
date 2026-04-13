@@ -1,0 +1,447 @@
+% ==============================================================================
+% 07_forensics_memoire_reseau.tex — UE SIS589
+% ==============================================================================
+\chapter{Forensique Mémoire, Réseau et Cloud}
+\label{chap:forensics-mem-net}
+
+\epigraph{\itshape « La mémoire vive dit la vérité.
+  Le disque peut mentir~; la RAM non. »}
+         {--- Michael Cohen, auteur de Rekall}
+
+\begin{boxobjectifs}
+\begin{enumerate}
+  \item Analyser un dump mémoire avec Volatility~3~: processus, connexions,
+        DLL, injection mémoire.
+  \item Détecter les techniques d'évasion en mémoire~: process hollowing,
+        DLL injection, DKOM.
+  \item Capturer et analyser le trafic réseau avec Wireshark et Zeek.
+  \item Reconstituer une session réseau et extraire des fichiers transférés.
+  \item Décrire les spécificités et défis de la forensique cloud (AWS,
+        Azure, GCP).
+\end{enumerate}
+\end{boxobjectifs}
+
+% ==============================================================================
+\section{Forensique mémoire}
+\label{sec:forensics-ram}
+% ==============================================================================
+
+\subsection{Pourquoi analyser la mémoire vive~?}
+
+La RAM contient des informations qu'aucun autre artefact ne peut fournir~:
+\begin{itemize}
+  \item \textbf{Malwares fileless~:} exécutés entièrement en mémoire,
+        sans fichier sur disque (T1059.001 + T1055). Invisibles au disque~;
+        visibles en RAM.
+  \item \textbf{Clés de chiffrement actives~:} présentes en mémoire
+        pendant l'exécution~; disparaissent à l'extinction.
+  \item \textbf{Processus injectés~:} code malveillant injecté dans un
+        processus légitime (\texttt{svchost.exe}, \texttt{explorer.exe}).
+  \item \textbf{Connexions réseau actives~:} l'état exact du réseau
+        au moment de la saisie.
+  \item \textbf{Mots de passe en clair~:} certains services (WDigest)
+        maintiennent les credentials en clair en mémoire.
+\end{itemize}
+
+\subsection{Volatility~3~: framework d'analyse mémoire}
+
+\begin{boxdef}
+\textbf{Volatility~3~:} Framework open-source Python pour l'analyse
+forensique de dumps mémoire Windows, Linux et macOS. Remplace Volatility~2
+depuis 2020. Utilise des tables de symboles (ISF) spécifiques à chaque
+version de noyau pour extraire les structures de données en mémoire.
+\end{boxdef}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Commandes Volatility~3 essentielles pour l'investigation},
+  label={lst:volatility3}]
+# Toutes les commandes : python3 vol.py -f dump.mem windows.PLUGIN ou linux.PLUGIN
+
+# ─── Identification du profil (système d'exploitation) ───────────────────────
+python3 vol.py -f ram-dump-srv-web-01.raw windows.info
+# Affiche : OS, version, build, architecture, date de dump
+
+# ─── Liste des processus (pslist) ────────────────────────────────────────────
+python3 vol.py -f ram.mem windows.pslist
+# Colonnes : PID, PPID, ImageFileName, CreateTime, ExitTime
+
+# pstree : vue arborescente (PPID → PID)
+python3 vol.py -f ram.mem windows.pstree
+
+# psscan : recherche directe dans la mémoire (détecte processus cachés)
+python3 vol.py -f ram.mem windows.psscan
+# Comparer pslist vs psscan : un processus dans psscan mais pas pslist
+# = processus caché par un rootkit (DKOM)
+
+# ─── Connexions réseau actives et historique ─────────────────────────────────
+python3 vol.py -f ram.mem windows.netstat
+# Affiche : PID, processus, protocole, src IP:port, dst IP:port, état
+
+# ─── DLL chargées par processus ──────────────────────────────────────────────
+python3 vol.py -f ram.mem windows.dlllist --pid 1234
+# Toute DLL sans chemin ou dans %TEMP% est suspecte
+
+# ─── Détecter les injections de code (code malveillant dans mémoire) ─────────
+python3 vol.py -f ram.mem windows.malfind
+# Recherche : pages mémoire exécutables avec des permissions anormales
+# (READ|WRITE|EXECUTE sans fichier mappé)
+# Résultat : dump hexadécimal + désassemblage des zones suspectes
+
+# ─── Extraire les hachages de mots de passe (pour vérification) ──────────────
+python3 vol.py -f ram.mem windows.hashdump
+# NTLM hashes des comptes locaux (à croiser avec le SAM)
+
+# ─── Lister les connexions réseau établies ───────────────────────────────────
+python3 vol.py -f ram.mem windows.netscan
+# Plus complet que netstat : inclut les connexions fermées récemment
+
+# ─── Linux : équivalents ──────────────────────────────────────────────────────
+python3 vol.py -f ram.mem linux.pslist
+python3 vol.py -f ram.mem linux.pstree
+python3 vol.py -f ram.mem linux.netstat
+python3 vol.py -f ram.mem linux.bash  # historique bash en mémoire
+\end{lstlisting}
+
+\subsection{Détection des techniques d'évasion en mémoire}
+
+\subsubsection{Process Injection (T1055)}
+
+\begin{boxdef}
+\textbf{Process Injection~:} Insertion de code malveillant dans l'espace
+d'adressage d'un processus légitime pour masquer son exécution. Le processus
+hôte (\texttt{svchost.exe}, \texttt{explorer.exe}) exécute le code de
+l'attaquant avec ses propres privilèges.
+\end{boxdef}
+
+Indicateurs de détection avec Volatility~:
+\begin{itemize}
+  \item Pages mémoire \texttt{MEM\_PRIVATE + PAGE\_EXECUTE\_READWRITE}
+        dans un processus normalement sans code privé (malfind).
+  \item DLL injectée sans chemin fichier ou avec un nom proche d'une DLL
+        légitime (\textit{DLL hijacking}).
+  \item Threads distants créés dans un autre processus (CreateRemoteThread).
+\end{itemize}
+
+\subsubsection{Process Hollowing (T1055.012)}
+
+\begin{boxdef}
+\textbf{Process Hollowing~:} Un processus légitime est démarré en état
+suspendu~; son code en mémoire est remplacé par du code malveillant~;
+puis le processus est repris. Le gestionnaire de tâches affiche
+\texttt{svchost.exe}~; le code exécuté est celui du malware.
+\end{boxdef}
+
+Indicateurs~: l'adresse de base de l'image en mémoire ne correspond
+pas à l'exécutable sur disque (section \texttt{malfind}) ; checksum MZ/PE
+divergent.
+
+\subsubsection{DKOM (Direct Kernel Object Manipulation, T1014)}
+
+\begin{boxdef}
+\textbf{DKOM~:} Rootkit modifiant directement les structures du noyau
+(liste doublement chaînée des EPROCESS) pour dissimuler un processus.
+Le processus apparaît dans \texttt{psscan} (scan brute de la mémoire)
+mais pas dans \texttt{pslist} (suit la liste officielle du noyau).
+\end{boxdef}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Détection DKOM --- comparaison pslist vs psscan},
+  label={lst:dkom-detection}]
+# Extraire pslist et psscan, identifier les divergences
+python3 vol.py -f ram.mem windows.pslist > pslist.txt
+python3 vol.py -f ram.mem windows.psscan > psscan.txt
+
+# Trouver les PIDs présents dans psscan mais absents de pslist
+python3 - << 'EOF'
+import re
+with open('pslist.txt') as f:
+    pids_list = set(re.findall(r'\b(\d{3,6})\b', f.read()))
+with open('psscan.txt') as f:
+    pids_scan = set(re.findall(r'\b(\d{3,6})\b', f.read()))
+hidden = pids_scan - pids_list
+print("Processus potentiellement cachés (DKOM) :", hidden)
+EOF
+
+# Si résultat non vide : processus caché = fort indicateur de rootkit
+\end{lstlisting}
+
+% ==============================================================================
+\section{Forensique réseau}
+\label{sec:forensics-net}
+% ==============================================================================
+
+\subsection{Capture du trafic réseau}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Capture réseau avec tcpdump et Wireshark},
+  label={lst:capture-reseau}]
+# ─── tcpdump : capture en ligne de commande ───────────────────────────────────
+# Capturer tout le trafic vers/depuis srv-web-01 (10.0.1.10)
+tcpdump -i em0 -w /mnt/evidence/capture-incident-20260412.pcap \
+  host 10.0.1.10 \
+  -C 100 \     # Rotation tous les 100 Mo
+  -G 3600      # Rotation toutes les heures
+
+# Capturer uniquement le trafic sortant suspect
+tcpdump -i em0 -w capture.pcap \
+  'src net 10.0.0.0/8 and not dst net 10.0.0.0/8 and not dst net 192.168.0.0/16'
+
+# ─── tshark (Wireshark en ligne de commande) ─────────────────────────────────
+# Afficher les connexions HTTP (sans SSL) depuis la capture
+tshark -r capture.pcap -Y "http" \
+  -T fields -e ip.src -e ip.dst -e http.request.method \
+            -e http.request.full_uri -e http.response.code
+
+# Extraire les fichiers transférés depuis le PCAP
+tshark -r capture.pcap --export-objects http,/mnt/evidence/http_objects/
+\end{lstlisting}
+
+\subsection{Analyse avec Wireshark}
+
+Filtres Wireshark essentiels pour l'investigation~:
+
+\begin{lstlisting}[style=StyleCode,
+  caption={Filtres Wireshark pour l'investigation forensique},
+  label={lst:wireshark-filtres}]
+# Trafic depuis/vers une IP suspecte
+ip.addr == 203.0.113.42
+
+# Connexions vers un port non standard (hors 80, 443, 22, 25)
+tcp.port != 80 and tcp.port != 443 and tcp.port != 22 and tcp.dstport > 1024
+
+# Requêtes DNS suspects (requêtes de type TXT = tunneling possible)
+dns.qry.type == 16 or dns.qry.name contains "base64"
+
+# Fichiers transférés en HTTP (POST avec body)
+http.request.method == "POST" and http.content_length > 0
+
+# Connexions TLS vers destinations non communes (JA3 hash)
+ssl.handshake.type == 1   # ClientHello — vérifier JA3
+
+# Détection de beacon C2 (connexions régulières vers une même IP)
+# Utiliser Statistics > Conversations puis filtrer par interval régulier
+
+# Reconstitution d'une session TCP complète
+# Clic droit sur un paquet → Follow → TCP Stream
+# → Affiche le dialogue complet en clair (si non chiffré)
+\end{lstlisting}
+
+\subsection{Zeek (anciennement Bro)~: analyse comportementale réseau}
+
+\begin{boxdef}
+\textbf{Zeek~:} Framework d'analyse de trafic réseau orienté sécurité.
+Génère des journaux structurés (JSON) par protocole~: \texttt{conn.log}
+(connexions), \texttt{dns.log}, \texttt{http.log}, \texttt{ssl.log},
+\texttt{files.log} (fichiers extraits). Plus haut niveau que Wireshark~:
+idéal pour la corrélation SIEM et la détection comportementale.
+\end{boxdef}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse Zeek sur une capture PCAP},
+  label={lst:zeek-analysis}]
+# Analyser un PCAP avec Zeek
+zeek -r capture-incident-20260412.pcap local
+
+# Fichiers générés : conn.log, dns.log, http.log, ssl.log, etc.
+
+# ─── conn.log : toutes les connexions avec durée et volume ───────────────────
+# Format : ts uid id.orig_h id.orig_p id.resp_h id.resp_p proto duration
+# Identifier les connexions longues (beacon C2)
+awk '$9 > 3600' conn.log | sort -k9 -rn | head -20
+
+# Identifier les connexions répétées à intervalles réguliers (beacon)
+awk '{print $4}' conn.log | sort | uniq -c | sort -rn | head -20
+
+# ─── dns.log : requêtes DNS suspectes ────────────────────────────────────────
+# Domaines avec entropie élevée (DGA)
+awk '{print $10}' dns.log | sort -u | \
+  awk '{
+    l=length($0); e=0
+    for(i=1;i<=l;i++) {c=substr($0,i,1); if(c~/[0-9]/) n++}
+    if(n/l > 0.3) print $0, "HIGH_ENTROPY"
+  }'
+
+# ─── http.log : POST vers des URLs non standards ─────────────────────────────
+awk '$15=="POST" && $7 !~ /\.(html|php|asp|js|css)$/' http.log
+
+# ─── ssl.log : connexions TLS vers IPs non connues ───────────────────────────
+awk '$11 !~ /amazon|google|microsoft|akamai/' ssl.log | head -20
+\end{lstlisting}
+
+\subsection{Reconstruction de sessions et extraction de fichiers}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Extraction de fichiers depuis un PCAP},
+  label={lst:pcap-extraction}]
+# ─── NetworkMiner : extraction automatique GUI ────────────────────────────────
+# Ouvrir le PCAP dans NetworkMiner > onglet Files
+# Extrait automatiquement : images, documents, binaires transférés
+
+# ─── tshark : extraction par protocole ───────────────────────────────────────
+# HTTP
+tshark -r capture.pcap --export-objects http,/evidence/files_http/
+# SMB
+tshark -r capture.pcap --export-objects smb,/evidence/files_smb/
+# FTP (données)
+tshark -r capture.pcap --export-objects ftp-data,/evidence/files_ftp/
+
+# ─── Zeek : extraction de fichiers avec hash ─────────────────────────────────
+zeek -r capture.pcap /opt/zeek/share/zeek/policy/frameworks/files/extract-all-files.zeek
+# Génère extract_files/ avec les fichiers + files.log avec SHA-256
+
+# ─── Vérification des fichiers extraits via VirusTotal (CLI) ─────────────────
+for f in /evidence/files_http/*; do
+  hash=$(sha256sum "$f" | cut -d' ' -f1)
+  echo "$hash  $(basename $f)"
+done
+# Soumettre les hashes manuellement ou via API VT
+\end{lstlisting}
+
+% ==============================================================================
+\section{Forensique cloud}
+\label{sec:forensics-cloud}
+% ==============================================================================
+
+\subsection{Spécificités et défis}
+
+La forensique cloud présente des défis fondamentaux différents de la
+forensique traditionnelle~:
+
+\begin{description}
+  \item[\textbf{Absence de contrôle physique~:}] L'investigateur n'a
+        pas accès au matériel physique. Les images disques brutes sont
+        inaccessibles (fournisseur cloud).
+  \item[\textbf{Élasticité~:}] Les instances peuvent être créées et
+        détruites en secondes. Un attaquant peut effacer ses traces en
+        supprimant l'instance.
+  \item[\textbf{Multi-tenant~:}] Les logs et métadonnées sont gérés par
+        le CSP (\textit{Cloud Service Provider}).
+  \item[\textbf{Multi-région~:}] Les données peuvent être réparties sur
+        plusieurs juridictions.
+\end{description}
+
+\subsection{Sources forensiques cloud}
+
+\begin{table}[H]
+\centering\small
+\caption{Sources de logs forensiques par fournisseur cloud}
+\label{tab:cloud-logs}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{2.5cm}p{4cm}p{7cm}}
+\toprule
+\tableauHeader{CSP} & \tableauHeader{Service} &
+\tableauHeader{Données disponibles} \\
+\midrule
+\textbf{AWS} & CloudTrail &
+API calls (qui a fait quoi, depuis quelle IP, quand) \\
+\textbf{AWS} & VPC Flow Logs &
+Trafic réseau (src/dst IP, ports, accept/reject) \\
+\textbf{AWS} & S3 Access Logs &
+Accès aux buckets (lecture, écriture, suppression) \\
+\textbf{Azure} & Azure Monitor / Activity Log &
+Actions sur les ressources Azure (CRUD) \\
+\textbf{Azure} & Azure AD Sign-in Logs &
+Authentifications, conditions d'accès conditionnel \\
+\textbf{GCP} & Cloud Audit Logs &
+Activité d'administration et d'accès aux données \\
+\textbf{Commun} & Agent OS (Wazuh, OSSec) &
+Logs système de l'instance VM (si déployé) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse des logs CloudTrail AWS --- investigation d'incident},
+  label={lst:cloudtrail}]
+# ─── AWS CLI : récupérer les événements CloudTrail ────────────────────────────
+aws cloudtrail lookup-events \
+  --start-time 2026-04-12T02:00:00 \
+  --end-time   2026-04-12T06:00:00 \
+  --max-results 50 \
+  --query 'Events[?Username==`backup-user`]'
+
+# ─── Filtrer les appels CreateUser et AttachUserPolicy (escalade) ─────────────
+aws cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=CreateUser \
+  --start-time 2026-04-12T00:00:00
+
+# ─── Analyser les logs CloudTrail JSON stockés en S3 ─────────────────────────
+# Télécharger le log
+aws s3 cp s3://lizbiz-cloudtrail-logs/AWSLogs/123456/CloudTrail/\
+    ap-south-1/2026/04/12/ . --recursive
+
+# Analyser avec jq
+cat *.json.gz | zcat | \
+  jq -r '.Records[] | select(.sourceIPAddress != "AWS Internal") |
+  [.eventTime, .userIdentity.userName, .eventName,
+   .sourceIPAddress, .errorCode] | @csv'
+\end{lstlisting}
+
+\subsection{Snapshot et acquisition d'instance cloud}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Acquisition forensique d'une instance EC2 compromise},
+  label={lst:ec2-forensics}]
+# ─── Étape 1 : Snapshot du volume EBS AVANT l'arrêt ─────────────────────────
+aws ec2 create-snapshot \
+  --volume-id vol-0a1b2c3d4e5f \
+  --description "forensic-snapshot-incident-20260412" \
+  --tag-specifications 'ResourceType=snapshot,Tags=[{Key=incident,Value=IR-2026-001}]'
+
+# ─── Étape 2 : Créer un volume à partir du snapshot (en lecture) ─────────────
+aws ec2 create-volume \
+  --availability-zone ap-south-1a \
+  --snapshot-id snap-0123456789abcdef0 \
+  --volume-type gp3
+
+# ─── Étape 3 : Attacher le volume à une instance d'analyse SIFT ──────────────
+aws ec2 attach-volume \
+  --volume-id vol-0newvolume \
+  --instance-id i-0siftworkstation \
+  --device /dev/sdf
+# Le volume est attaché en lecture seule (équivalent write blocker)
+
+# ─── Étape 4 : Monter et analyser ────────────────────────────────────────────
+sudo mount -o ro /dev/sdf1 /mnt/forensics/
+# → Appliquer les mêmes techniques que ch. 6 (registre, artefacts, timeline)
+\end{lstlisting}
+
+% ==============================================================================
+\section*{Résumé}
+% ==============================================================================
+
+\begin{boxresume}
+\begin{itemize}
+  \item Forensique RAM~: Volatility~3. Commandes clés~: pslist, psscan,
+        pstree, netstat/netscan, dlllist, malfind, hashdump.
+  \item Détection d'évasion~: process injection (malfind),
+        process hollowing (MZ/PE mismatch), DKOM (pslist~$\neq$~psscan).
+  \item Forensique réseau~: tcpdump/Wireshark (PCAP), Zeek (logs structurés
+        JSON), NetworkMiner (extraction fichiers), tshark --export-objects.
+  \item Forensique cloud~: CloudTrail (AWS), Activity Log (Azure),
+        Cloud Audit Logs (GCP). Snapshot EBS avant arrêt instance.
+  \item Défis cloud~: pas d'accès physique, élasticité, multi-tenant,
+        multi-juridictionnel.
+\end{itemize}
+\end{boxresume}
+
+\begin{boxexo}
+\textbf{Ex.~7.1 — Analyse mémoire.}
+À partir du dump \texttt{ram-srv-web-01.raw} fourni (Lab~2), utilisez
+Volatility~3 pour~: (a)~lister les processus actifs au moment de la
+compromission~; (b)~identifier les connexions réseau établies~;
+(c)~exécuter malfind et documenter les zones suspectes~;
+(d)~déterminer si un processus est caché (DKOM).
+
+\medskip\textbf{Ex.~7.2 — Analyse réseau.}
+À partir du fichier \texttt{capture-incident.pcap} fourni, identifiez~:
+(a)~l'IP de commande et contrôle (C2) utilisée~; (b)~le protocole
+de communication~; (c)~les données exfiltrées~; (d)~la durée totale
+de l'activité C2. Utilisez Wireshark + Zeek.
+
+\medskip\textbf{Ex.~7.3 — CloudTrail.}
+Les logs CloudTrail de LiZbiZ-SIS (compte AWS dev) indiquent une
+action \texttt{CreateAccessKey} à 03:22~UTC le 12/04/2026 depuis
+une IP TOR. Quelles sont les 4~prochaines actions d'investigation~?
+Quels logs consulter~?
+\end{boxexo}

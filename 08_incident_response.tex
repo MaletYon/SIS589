@@ -1,0 +1,433 @@
+% ==============================================================================
+% 08_incident_response.tex — UE SIS589
+% ==============================================================================
+\chapter{Réponse aux Incidents de Sécurité}
+\label{chap:ir}
+
+\epigraph{\itshape « La préparation n'est pas une dépense~;
+  c'est une assurance contre le chaos. »}
+         {--- NIST SP~800-61}
+
+\begin{boxobjectifs}
+\begin{enumerate}
+  \item Dérouler le cycle de réponse aux incidents selon ISO~27035 et NIST~SP~800-61.
+  \item Constituer et opérer un CSIRT~; définir ses rôles et ses interfaces.
+  \item Rédiger un playbook opérationnel pour un type d'incident courant.
+  \item Appliquer les techniques de confinement, d'éradication et de
+        rétablissement.
+  \item Mapper les phases de réponse aux tactiques MITRE ATT\&CK.
+  \item Rédiger un rapport d'incident complet.
+\end{enumerate}
+\end{boxobjectifs}
+
+% ==============================================================================
+\section{Le cycle de réponse aux incidents}
+\label{sec:ir-cycle}
+% ==============================================================================
+
+\subsection{ISO~27035 et NIST~SP~800-61}
+
+Les deux référentiels s'articulent autour des mêmes phases fondamentales~:
+
+\begin{table}[H]
+\centering\small
+\caption{Comparaison ISO~27035 et NIST~SP~800-61}
+\label{tab:ir-cycle}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{2.5cm}p{5cm}p{5.5cm}}
+\toprule
+\tableauHeader{Phase} & \tableauHeader{ISO~27035} &
+\tableauHeader{NIST SP~800-61} \\
+\midrule
+1 & Planification et préparation &
+Préparation (\textit{Preparation}) \\
+2 & Détection et signalement &
+Détection et analyse (\textit{Detection \& Analysis}) \\
+3 & Évaluation et décision &
+(inclus dans Détection et analyse) \\
+4 & Réponse (confinement, éradication, rétablissement) &
+Confinement, éradication, rétablissement \\
+5 & Leçons tirées &
+Activités post-incident \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Phase~1~: Préparation}
+
+La préparation est la phase la plus déterminante~: la qualité de la
+réponse en situation de crise est proportionnelle à la qualité de la
+préparation en situation calme.
+
+Éléments de préparation indispensables~:
+\begin{itemize}
+  \item \textbf{Politique de gestion des incidents~:} définit ce qu'est
+        un incident, les niveaux de gravité, les procédures d'escalade,
+        les obligations légales de notification.
+  \item \textbf{CSIRT constitué~:} équipe identifiée, formée, disponible
+        en astreinte. Contacts d'urgence actualisés.
+  \item \textbf{Playbooks rédigés~:} procédures pour chaque type d'incident
+        probable (ransomware, phishing, fuite de données, DDoS).
+  \item \textbf{Outils préparés~:} station forensique SIFT, supports
+        d'acquisition vierges, bloqueurs en écriture, accès SIEM.
+  \item \textbf{Exercices réguliers~:} simulations Tabletop, red team.
+\end{itemize}
+
+\subsection{Phase~2~: Détection et analyse}
+
+\subsubsection{Sources de détection}
+
+\begin{table}[H]
+\centering\small
+\caption{Sources de détection des incidents}
+\label{tab:detection-sources}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4cm}p{4cm}p{5.5cm}}
+\toprule
+\tableauHeader{Source} & \tableauHeader{Type} &
+\tableauHeader{Fiabilité / Délai} \\
+\midrule
+Alerte SIEM & Automatique & Rapide, taux de FP variable \\
+Alerte EDR / AV & Automatique & Fiable pour les malwares connus \\
+Signalement utilisateur & Manuel & Tardif mais indicateur de gravité \\
+Banque / partenaire & Externe & Fiable, souvent tardif \\
+CERT national / CERT-MU & Externe & Haute fiabilité, délai variable \\
+Threat hunting & Proactif & Excellent~; nécessite N3 disponible \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Triage et qualification}
+
+L'analyste N1 répond à trois questions~:
+\begin{enumerate}
+  \item \textbf{Est-ce un vrai positif~?} (ou un faux positif)
+  \item \textbf{Quelle est la gravité réelle~?} (impact technique + impact métier)
+  \item \textbf{Quelle est l'urgence~?} (contenir maintenant ou analyser d'abord)
+\end{enumerate}
+
+\begin{table}[H]
+\centering\small
+\caption{Grille de classification des incidents LiZbiZ-SIS}
+\label{tab:gravite-incidents}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{1.8cm}p{4cm}p{4.5cm}p{3.5cm}}
+\toprule
+\tableauHeader{Gravité} & \tableauHeader{Critères} &
+\tableauHeader{Exemples} & \tableauHeader{Délai de réponse} \\
+\midrule
+\gravite{critique} &
+Impact immédiat sur la continuité ou données très sensibles &
+Ransomware, exfiltration BDD clients, compromission AD &
+$<$~1~heure, astreinte activée \\
+\gravite{haute} &
+Impact significatif, propagation probable &
+Brute force réussi, malware détecté non confiné &
+$<$~4~heures \\
+\gravite{moyenne} &
+Impact limité, propagation improbable &
+Phishing réussi sur un poste, scan interne &
+$<$~24~heures \\
+\gravite{basse} &
+Événement de sécurité sans impact confirmé &
+Tentative de phishing bloquée, scan externe &
+$<$~72~heures \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+\section{Le CSIRT}
+\label{sec:csirt}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{CSIRT (\textit{Computer Security Incident Response Team})~:}
+Équipe dédiée à la réception, au tri, à l'analyse, à la réponse et à la
+coordination lors d'incidents de sécurité. Point de contact unique.
+Un CSIRT interne est différent d'un CERT national (externe, sectoriel).
+\end{boxdef}
+
+\begin{table}[H]
+\centering\small
+\caption{Rôles dans un CSIRT}
+\label{tab:csirt-roles}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3.5cm}p{5.5cm}p{4.5cm}}
+\toprule
+\tableauHeader{Rôle} & \tableauHeader{Responsabilités} &
+\tableauHeader{Interfaces} \\
+\midrule
+Incident Manager & Coordonne l'ensemble de la réponse~; tient le log
+                    d'incident~; décide des escalades &
+DG, RSSI, équipes \\
+Analyste technique & Investigation forensique, confinement technique,
+                     éradication &
+SOC N2/N3, équipes IT \\
+Responsable communication & Communication interne (direction, métiers)
+                             et externe (clients, presse, autorités) &
+DG, communication, CNIL \\
+Coordinateur légal & Évalue les obligations de notification~;
+                      interface avec les juristes et le parquet &
+Juriste, CNIL, ANTIC \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{boxlizbiz}
+\textbf{LiZbiZ-SIS~: CSIRT minimal}
+
+LiZbiZ-SIS n'a pas de CSIRT formel. Suite à l'incident du 12/04/2026,
+la DSI a constitué une cellule de crise ad hoc~: 2~analystes SOC
+(N1 + N2), 1~ingénieur réseau, le RSSI (à temps partiel),
+1~représentant de la direction. Une convention avec un MSSP a été
+signée pour l'assistance forensique de niveau N3. Un numéro d'astreinte
+a été créé. Prochaine étape~: rédiger les playbooks ransomware et
+fuite de données.
+\end{boxlizbiz}
+
+% ==============================================================================
+\section{Playbooks et Runbooks}
+\label{sec:playbooks}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{Playbook~:} Document décrivant la procédure logique de réponse
+à un type d'incident donné. Répond à \og{}Quoi faire~?\fg{} en termes de
+décisions, escalades et communications. Indépendant de la technologie.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{Runbook~:} Document technique détaillant les commandes exactes
+et les actions précises à exécuter pour chaque étape du playbook.
+Répond à \og{}Comment faire exactement~?\fg{}. Technologie-spécifique.
+\end{boxdef}
+
+\begin{boxplaybook}
+\textbf{Playbook~: Compromission de compte (accès non autorisé SSH)}
+
+\textbf{Déclencheur~:} Alerte SIEM règle~100200 (brute force SSH réussi)
+ou signalement utilisateur d'activité inhabituelle.
+
+\textbf{Étape~1~--- Qualification (N1, $<$~15~min)~:}
+\begin{itemize}
+  \item Vérifier l'alerte SIEM~: l'IP source est-elle dans la liste blanche~?
+  \item Identifier l'utilisateur concerné et son profil (admin / standard).
+  \item Si faux positif confirmé~: fermer le ticket, documenter.
+  \item Si incident confirmé~: escalader N2, activer le log d'incident.
+\end{itemize}
+
+\textbf{Étape~2~--- Confinement immédiat (N2, $<$~30~min)~:}
+\begin{itemize}
+  \item Désactiver le compte compromis dans l'AD.
+  \item Bloquer l'IP source au firewall pfSense.
+  \item Isoler la machine cible dans un VLAN de quarantaine.
+  \item Capturer l'état de la mémoire (avml / WinPmem) avant tout arrêt.
+\end{itemize}
+
+\textbf{Étape~3~--- Investigation (N2/N3, $<$~4~h)~:}
+\begin{itemize}
+  \item Analyser auth.log~: depuis quand~? Quelle IP~? Quel user~?
+  \item Analyser la timeline Sysmon~: commandes exécutées, fichiers créés,
+        connexions sortantes.
+  \item Vérifier les mouvements latéraux depuis cette machine.
+  \item Identifier les persistances (cron, Run keys, nouveaux comptes).
+\end{itemize}
+
+\textbf{Étape~4~--- Éradication~:}
+\begin{itemize}
+  \item Supprimer les artefacts malveillants identifiés.
+  \item Réinitialiser les credentials compromis.
+  \item Patcher la vulnérabilité exploitée.
+\end{itemize}
+
+\textbf{Étape~5~--- Rétablissement~:}
+\begin{itemize}
+  \item Remettre la machine en production (restauration si nécessaire).
+  \item Renforcer la surveillance (nouvelle règle SIEM ciblée).
+\end{itemize}
+
+\textbf{Étape~6~--- Notification~:}
+\begin{itemize}
+  \item Notifier la direction~: impact, mesures prises.
+  \item Évaluer l'obligation de notifier l'ANTIC.
+  \item RETEX dans les 72~heures.
+\end{itemize}
+\end{boxplaybook}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Runbook --- confinement SSH compromis (Linux)},
+  label={lst:runbook-ssh}]
+# ─── Désactiver le compte compromis ──────────────────────────────────────────
+# Sur le contrôleur de domaine (ou /etc/shadow si local)
+usermod -L backup          # Verrouiller le compte Unix
+# OU sur AD (PowerShell)
+Disable-ADAccount -Identity "backup"
+
+# ─── Bloquer l'IP source au firewall pfSense (CLI) ───────────────────────────
+# Via l'API pfSense ou directement sur le shell pfSense
+pfctl -t blocklist_ir -T add 203.0.113.42
+pfctl -f /etc/pf.conf   # Recharger les règles
+
+# ─── Isoler la machine dans un VLAN de quarantaine (switch manageable) ────────
+# Changer le VLAN du port de srv-web-01 vers VLAN 99 (quarantaine)
+# Via CLI switch (ex: Cisco IOS) :
+# interface GigabitEthernet0/5
+# switchport access vlan 99
+
+# ─── Capturer la mémoire AVANT tout autre action ──────────────────────────────
+ssh admin@10.0.1.10 "sudo avml /tmp/ram-$(hostname)-$(date +%Y%m%d-%H%M%S).lime"
+scp admin@10.0.1.10:/tmp/ram-*.lime /mnt/evidence/
+ssh admin@10.0.1.10 "sudo rm /tmp/ram-*.lime"
+
+# ─── Documenter : toutes les commandes ci-dessus dans le log d'incident ───────
+echo "$(date -u) | MINKA T.E. | Compte backup desactive, IP bloquee, VLAN quarantaine activé, RAM capturée" \
+  >> /var/log/incident_INC-2026-0412-001.log
+\end{lstlisting}
+
+% ==============================================================================
+\section{Confinement, éradication et rétablissement}
+\label{sec:cir}
+% ==============================================================================
+
+\subsection{Confinement}
+
+\begin{boxdef}
+\textbf{Confinement~:} Mesures visant à limiter la propagation d'un incident
+\textbf{sans altérer les preuves}. Le confinement est prioritaire sur
+l'éradication~: on contient d'abord, on nettoie ensuite.
+\end{boxdef}
+
+Techniques de confinement~:
+\begin{itemize}
+  \item \textbf{Isolation réseau~:} VLAN de quarantaine, règle firewall,
+        déconnexion câble (dernier recours).
+  \item \textbf{Désactivation de compte~:} compte AD, compte local.
+  \item \textbf{Blocage d'IP~:} au firewall, au niveau FAI si nécessaire.
+  \item \textbf{Révocation de certificat / token~:} API keys, jetons OAuth.
+  \item \textbf{Snapshot avant confinement~:} capturer l'état avant
+        d'agir pour l'investigation.
+\end{itemize}
+
+\subsection{Éradication}
+
+L'éradication supprime la cause de l'incident~:
+\begin{itemize}
+  \item Supprimer les fichiers malveillants identifiés.
+  \item Désactiver / supprimer les mécanismes de persistance
+        (Run keys, services, cron, authorized\_keys).
+  \item Réinitialiser les credentials compromis (tous~: pas seulement
+        le compte initialement compromis).
+  \item Patcher la vulnérabilité exploitée.
+  \item Scanner l'ensemble du parc pour détecter une propagation
+        non identifiée.
+\end{itemize}
+
+\subsection{Rétablissement}
+
+\begin{itemize}
+  \item Restaurer les systèmes depuis des sauvegardes vérifiées
+        (antérieures à la compromission).
+  \item Remettre progressivement en production (pas en masse).
+  \item Renforcer la surveillance~: règles SIEM spécifiques à l'attaque
+        documentée, période de monitoring renforcée (30~jours).
+  \item Valider le retour à la normale avec les équipes métier.
+\end{itemize}
+
+% ==============================================================================
+\section{Rapport d'incident}
+\label{sec:rapport-incident}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{Rapport d'incident~:} Document structuré décrivant la nature
+de l'incident, sa chronologie, son impact, les actions de réponse
+entreprises et les recommandations. Deux versions~: technique (pour le
+CSIRT, N3) et executive (pour la direction, non-technique).
+\end{boxdef}
+
+Structure type d'un rapport d'incident~:
+\begin{enumerate}
+  \item \textbf{Résumé exécutif} (1~page~: quoi, quand, impact, mesures).
+  \item \textbf{Chronologie de l'incident} (timeline annotée MITRE).
+  \item \textbf{Analyse technique} (vecteur initial, propagation, TTPs).
+  \item \textbf{Preuves collectées} (liste avec hashes).
+  \item \textbf{Impact} (technique~: systèmes affectés~; métier~:
+        données, services, clients).
+  \item \textbf{Mesures de réponse prises} (confinement, éradication,
+        rétablissement).
+  \item \textbf{Recommandations} (court terme~: remédiations~;
+        long terme~: renforcement défensif).
+  \item \textbf{Annexes} (logs bruts, captures, chaîne de custody).
+\end{enumerate}
+
+% ==============================================================================
+\section{Mapping MITRE ATT\&CK}
+\label{sec:mitre-ir}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{MITRE ATT\&CK~:} Base de connaissance (knowledge base) des tactiques,
+techniques et procédures (\termecle{TTPs}) utilisées par les attaquants dans
+les environnements réels. 14~tactiques (colonnes), 200+~techniques (lignes),
+organisées en matrices Enterprise, Mobile, ICS. Standard pour l'annotation
+des rapports d'incident et l'ingénierie de détection.
+\end{boxdef}
+
+\begin{table}[H]
+\centering\small
+\caption{Mapping de l'incident LiZbiZ-SIS aux TTPs MITRE ATT\&CK}
+\label{tab:mitre-mapping}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3.5cm}p{3.5cm}p{3.5cm}p{3.5cm}}
+\toprule
+\tableauHeader{Phase IR} & \tableauHeader{Action attaquant} &
+\tableauHeader{TTP MITRE} & \tableauHeader{Détection SOC} \\
+\midrule
+Reconnaissance & Scan de ports & T1595 & pfSense log (SYN flood) \\
+Accès initial & Brute force SSH & T1110.001 & Règle 100200 SIEM \\
+Exécution & \texttt{wget} + script bash & T1059.004 & Sysmon EID~1 \\
+C2 & Connexion HTTPS sortante & T1071.001 & Sysmon EID~3 + pfSense \\
+Mouvement latéral & SMB vers ERP & T1021.002 & EID~4624 + EID~4776 \\
+Collecte & Accès base de données & T1005 & Logs MySQL + proxy \\
+Couverture & Effacement journal & T1070.001 & EID~1102 SIEM \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+\section*{Résumé}
+% ==============================================================================
+
+\begin{boxresume}
+\begin{itemize}
+  \item Cycle IR~: Préparation~$\to$~Détection~$\to$~Évaluation~$\to$
+        Réponse~$\to$~RETEX (ISO~27035 / NIST~800-61).
+  \item CSIRT~: équipe avec rôles définis (Manager, Analyste, Communication,
+        Légal). Constituer avant l'incident.
+  \item Playbook~: quoi faire (logique) ~; Runbook~: comment faire (commandes).
+  \item Confinement d'abord~; preuves préservées~; éradication ensuite~;
+        rétablissement progressif.
+  \item Rapport d'incident~: résumé exécutif + chronologie + analyse
+        technique + recommandations.
+  \item Mapping MITRE ATT\&CK~: 14~tactiques, documenter chaque action
+        attaquant avec son TTP.
+\end{itemize}
+\end{boxresume}
+
+\begin{boxexo}
+\textbf{Ex.~8.1 — Rédaction de playbook.}
+Rédigez un playbook complet pour un incident de ransomware affectant
+LiZbiZ-SIS~: 6~étapes, décisions à chaque étape, escalades, outils.
+
+\medskip\textbf{Ex.~8.2 — Classification.}
+À 02h30, une alerte Wazuh signale une modification de \texttt{/etc/passwd}
+sur srv-web-01 par le compte \texttt{www-data}. Classifiez l'incident,
+justifiez, et listez les 5~premières actions à mener.
+
+\medskip\textbf{Ex.~8.3 — Rapport d'incident.}
+Rédigez le résumé exécutif (1~page) de l'incident LiZbiZ-SIS du
+12/04/2026 à destination du Directeur Général, sans jargon technique,
+en couvrant~: nature de l'incident, impact, mesures prises,
+coût estimé, recommandations.
+\end{boxexo}

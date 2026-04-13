@@ -1,0 +1,512 @@
+% ==============================================================================
+% 09_threat_intelligence.tex — UE SIS589
+% ==============================================================================
+\chapter{Cyber Threat Intelligence}
+\label{chap:cti}
+
+\epigraph{\itshape « Knowing your enemy is the first condition of victory. »}
+         {--- Sun Tzu, \textit{L'Art de la Guerre}}
+
+\begin{boxobjectifs}
+\begin{enumerate}
+  \item Définir la CTI et ses quatre niveaux~: stratégique, opérationnel,
+        tactique, technique.
+  \item Appliquer les modèles structurants~: Cyber Kill Chain, Diamond Model,
+        MITRE ATT\&CK.
+  \item Distinguer et exploiter les IoC, IoA et TTP.
+  \item Décrire les formats d'échange STIX/TAXII et les plateformes
+        MISP/OpenCTI.
+  \item Intégrer la CTI dans les règles SIEM et les procédures de réponse.
+  \item Évaluer la crédibilité d'une source de threat intelligence.
+\end{enumerate}
+\end{boxobjectifs}
+
+% ==============================================================================
+\section{Définition et niveaux de la CTI}
+\label{sec:cti-def}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{Cyber Threat Intelligence (CTI)~:} Renseignement produit à partir
+de la collecte, du traitement et de l'analyse d'informations sur les menaces
+cybernétiques. La CTI est \textit{actionnelle}~: elle répond à une question
+décisionnelle spécifique et est fournie au bon acteur, au bon moment, sous
+le bon format. Un flux d'IoC brut n'est pas de la CTI~; c'est une donnée
+brute. La CTI est le produit de son analyse.
+\end{boxdef}
+
+La CTI opère à quatre niveaux distincts, correspondant à des audiences
+et des horizons temporels différents~:
+
+\begin{table}[H]
+\centering\small
+\caption{Niveaux de la Cyber Threat Intelligence}
+\label{tab:cti-niveaux}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{2.8cm}p{3cm}p{3.5cm}p{5cm}}
+\toprule
+\tableauHeader{Niveau} & \tableauHeader{Audience} &
+\tableauHeader{Horizon} & \tableauHeader{Contenu type} \\
+\midrule
+\textbf{Stratégique} &
+Direction, COMEX &
+Long terme &
+Tendances géopolitiques, secteurs ciblés, impacts business \\
+\textbf{Opérationnel} &
+RSSI, responsables SOC &
+Moyen terme &
+Campagnes actives, groupes d'attaque, intentions \\
+\textbf{Tactique} &
+Analystes N2/N3 &
+Court terme &
+TTPs des adversaires, techniques d'attaque, playbooks adversaires \\
+\textbf{Technique} &
+Analystes N1, SIEM &
+Immédiat &
+IoC~: hashes, IPs, domaines, URLs, règles YARA/Sigma \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{boiteRemarque}{CTI versus données brutes}
+Un flux d'adresses IP malveillantes est une \textbf{donnée brute}.
+La même liste, filtrée pour ne conserver que les IPs qui communiquent
+avec des secteurs similaires au vôtre, datée de moins de 30~jours,
+avec un niveau de confiance documenté et un contexte de campagne~:
+c'est de la \textbf{CTI technique actionnelle}. La valeur ajoutée de
+l'analyste CTI réside dans ce traitement.
+\end{boiteRemarque}
+
+% ==============================================================================
+\section{Indicateurs~: IoC, IoA, TTP}
+\label{sec:indicateurs}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{IoC (\textit{Indicator of Compromise})~:} Artefact observable dans
+un système ou un réseau, indiquant une compromission passée ou en cours.
+Un IoC est \textbf{réactif} (postérieur à l'attaque) et a une durée de vie
+limitée (les attaquants changent leurs IPs, domaines et hashes régulièrement).
+Exemples~: hash SHA-256 d'un malware, IP d'un serveur C2, domaine DGA,
+chemin de fichier suspect.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{IoA (\textit{Indicator of Attack})~:} Indicateur de comportement
+suspect \textbf{en cours d'attaque}, indépendamment des artefacts.
+Un IoA est \textbf{proactif}~: il détecte l'intention ou l'action avant
+la compromission complète. Plus durable qu'un IoC (les comportements
+changent moins vite que les artefacts).
+Exemples~: exécution de PowerShell avec paramètre encodé, création de
+compte admin hors des heures ouvrables, connexion RDP depuis un pays
+inhabituel.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{TTP (\textit{Tactics, Techniques and Procedures})~:}
+Comportements, méthodes et procédures caractéristiques d'un acteur
+de la menace. Niveau le plus durable et le plus difficile à changer
+pour un attaquant. Les TTPs définissent le \og{}style opératoire\fg{}
+d'un groupe (APT29, Lazarus, etc.). Référence normative~: MITRE ATT\&CK.
+\end{boxdef}
+
+\begin{boiteRemarque}{La pyramide de la douleur}
+David Bianco (\textit{Pyramid of Pain}, 2013) hiérarchise les IoC
+par la difficulté qu'ils imposent à l'attaquant lorsqu'ils sont
+bloqués~: hashes (trivial à changer)~$<$~IPs~$<$~domaines~$<$~artefacts
+réseau~$<$~outils~$<$~TTPs (très difficile à changer). Bloquer des TTPs
+est la stratégie défensive la plus durable.
+\end{boiteRemarque}
+
+% ==============================================================================
+\section{Modèles de structuration}
+\label{sec:cti-modeles}
+% ==============================================================================
+
+\subsection{Cyber Kill Chain (Lockheed Martin, 2011)}
+
+\begin{boxdef}
+\textbf{Cyber Kill Chain~:} Modèle décrivant les sept phases séquentielles
+d'une attaque avancée. Rompre la chaîne à n'importe quel maillon empêche
+la réalisation de l'objectif final.
+\end{boxdef}
+
+\begin{enumerate}
+  \item \textbf{Reconnaissance~:} collecte d'informations sur la cible (OSINT,
+        scan, phishing ciblé). Correspondance ATT\&CK~: TA0043.
+  \item \textbf{Weaponization~:} création du vecteur d'attaque (exploit +
+        payload). Aucune interaction cible.
+  \item \textbf{Delivery~:} livraison du vecteur (email de phishing, clé USB,
+        exploitation d'un service exposé). ATT\&CK~: TA0001.
+  \item \textbf{Exploitation~:} déclenchement de la vulnérabilité sur le
+        système cible. ATT\&CK~: TA0002.
+  \item \textbf{Installation~:} dépôt d'un accès persistant (implant,
+        backdoor, RAT). ATT\&CK~: TA0003.
+  \item \textbf{Command \& Control (C2)~:} établissement d'un canal de
+        communication entre l'implant et l'infrastructure de l'attaquant.
+        ATT\&CK~: TA0011.
+  \item \textbf{Actions on Objectives~:} exfiltration, chiffrement
+        (ransomware), sabotage. ATT\&CK~: TA0009, TA0040.
+\end{enumerate}
+
+La Kill Chain est utile pour les discussions stratégiques mais souffre
+d'une limite~: elle est séquentielle et ne modélise pas les attaquants
+qui sont déjà à l'intérieur ou qui opèrent en cycles non linéaires.
+
+\subsection{Diamond Model}
+
+\begin{boxdef}
+\textbf{Diamond Model (Caltagirone, Pendergast, Betz, 2013)~:}
+Modèle d'analyse des incidents structurant chaque événement malveillant
+autour de quatre sommets~: \textbf{Adversaire} (qui), \textbf{Infrastructure}
+(comment~: IPs, domaines), \textbf{Capacité} (quoi~: outils, exploits)
+et \textbf{Victime} (cible). Les méta-fonctionnalités (horodatage,
+phase de la Kill Chain, orientation socio-politique) complètent le modèle.
+\end{boxdef}
+
+L'intérêt du Diamond Model est la \textbf{pivotisation}~: si l'on
+connaît un sommet (ex. une IP d'infrastructure), on peut inférer les
+autres sommets~; si l'on connaît une capacité (ex. un outil), on peut
+retrouver d'autres victimes ou l'adversaire associé.
+
+\subsection{MITRE ATT\&CK}
+
+\begin{boxdef}
+\textbf{MITRE ATT\&CK (\textit{Adversarial Tactics, Techniques and Common
+Knowledge})~:} Base de connaissance mondiale des TTPs d'attaquants réels,
+structurée en matrices par environnement (Enterprise, Mobile, ICS).
+14~tactiques (colonnes), $>$200~techniques, $>$400~sous-techniques.
+Mise à jour régulière. Standard de facto pour l'annotation des incidents,
+l'ingénierie de détection et la mesure de couverture défensive.
+\end{boxdef}
+
+Les 14~tactiques de la matrice Enterprise~:
+TA0043~Reconnaissance, TA0042~Resource Development,
+TA0001~Initial Access, TA0002~Execution, TA0003~Persistence,
+TA0004~Privilege Escalation, TA0005~Defense Evasion,
+TA0006~Credential Access, TA0007~Discovery, TA0008~Lateral Movement,
+TA0009~Collection, TA0011~C\&C, TA0010~Exfiltration,
+TA0040~Impact.
+
+% ==============================================================================
+\section{Formats d'échange~: STIX et TAXII}
+\label{sec:stix-taxii}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{STIX (\textit{Structured Threat Information eXpression})~:}
+Format JSON standardisé (OASIS, v2.1) pour représenter des objets
+de threat intelligence~: indicateurs (\textit{Indicator}),
+acteurs (\textit{Threat-Actor}), campagnes (\textit{Campaign}),
+TTPs (\textit{Attack-Pattern}), outils (\textit{Tool}),
+vulnérabilités (\textit{Vulnerability}), et leurs relations.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{TAXII (\textit{Trusted Automated eXchange of Intelligence
+Information})~:} Protocole HTTP(S) standardisé (OASIS) pour la
+transmission automatique d'objets STIX entre plateformes de threat
+intelligence. Deux services~: \textit{Collection} (dépôt d'objets)
+et \textit{Channel} (publication push).
+\end{boxdef}
+
+\begin{lstlisting}[style=StyleCode, language=YAML,
+  caption={Objet STIX~2.1 --- indicateur IP malveillante},
+  label={lst:stix-indicator}]
+{
+  "type"             : "indicator",
+  "spec_version"     : "2.1",
+  "id"               : "indicator--a6e08ad4-9e2f-4c0d-b4f2-3e7c1d8b2a3e",
+  "created"          : "2026-04-12T05:00:00Z",
+  "modified"         : "2026-04-12T05:00:00Z",
+  "name"             : "IP C2 incident LiZbiZ-SIS 12/04/2026",
+  "description"      : "Adresse IP utilisée comme serveur C2 lors de l'incident",
+  "pattern"          : "[ipv4-addr:value = '185.220.101.5']",
+  "pattern_type"     : "stix",
+  "valid_from"       : "2026-04-12T03:17:00Z",
+  "indicator_types"  : ["malicious-activity", "compromised"],
+  "confidence"       : 95,
+  "kill_chain_phases": [{
+    "kill_chain_name" : "mitre-attack",
+    "phase_name"      : "command-and-control"
+  }],
+  "labels"           : ["incident:INC-2026-0412-001", "tlp:amber"]
+}
+\end{lstlisting}
+
+% ==============================================================================
+\section{Plateformes de CTI~: MISP et OpenCTI}
+\label{sec:cti-plateformes}
+% ==============================================================================
+
+\subsection{MISP (\textit{Malware Information Sharing Platform})}
+
+\begin{boxdef}
+\textbf{MISP~:} Plateforme open-source de partage d'informations sur
+les menaces. Supporte les formats STIX, OpenIOC, CSV. Permet la création
+d'événements (incidents), le tagging (TLP, PAP, MITRE ATT\&CK),
+la corrélation automatique entre événements, et la fédération avec
+d'autres instances MISP (partage sectoriel, national, CIRCL).
+\end{boxdef}
+
+Fonctions clés pour le SOC~:
+\begin{itemize}
+  \item Alimenter le SIEM en IoC (export CSV/JSON vers Logstash).
+  \item Corréler un hash ou une IP observée lors d'un incident avec
+        les événements du passé.
+  \item Partager les IoC de l'incident avec les partenaires (secteur,
+        CERT-MU Cameroun).
+  \item Consommer les flux CTI externes (Emerging Threats, AlienVault OTX,
+        abuse.ch, VirusTotal).
+\end{itemize}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={MISP API --- recherche et export d'IoC},
+  label={lst:misp-api}]
+# ─── Rechercher une IP dans MISP (PyMISP) ────────────────────────────────────
+python3 << 'EOF'
+from pymisp import PyMISP
+
+misp = PyMISP('https://misp.lizbiz.local', 'API_KEY', False)
+
+# Rechercher si l'IP C2 est connue dans MISP
+result = misp.search(value='185.220.101.5', type_attribute='ip-dst')
+for event in result:
+    print(f"Événement : {event['Event']['info']}")
+    print(f"Date      : {event['Event']['date']}")
+    print(f"Tags      : {[t['name'] for t in event['Event'].get('Tag', [])]}")
+EOF
+
+# ─── Exporter les IoC en CSV pour le SIEM (derniers 7 jours) ─────────────────
+curl -s -H "Authorization: API_KEY" \
+  "https://misp.lizbiz.local/attributes/restSearch/returnFormat:csv/\
+type:ip-dst/last:7d/to_ids:1" \
+  -o /etc/logstash/ioc_ips.csv
+
+# ─── Créer un événement MISP depuis l'incident ────────────────────────────────
+python3 << 'EOF'
+from pymisp import PyMISP, MISPEvent, MISPAttribute
+
+misp = PyMISP('https://misp.lizbiz.local', 'API_KEY', False)
+event = MISPEvent()
+event.info = "Incident LiZbiZ-SIS 12/04/2026 - Brute force SSH + C2"
+event.threat_level_id = 1  # High
+event.distribution = 1     # This community only
+
+# Ajouter les IoC
+for ip in ['203.0.113.42', '185.220.101.5']:
+    event.add_attribute('ip-dst', ip, to_ids=True)
+event.add_attribute('sha256',
+  '3a7d4f8bc2e910...', comment='lp.sh payload', to_ids=True)
+
+misp.add_event(event)
+print("Événement créé avec succès")
+EOF
+\end{lstlisting}
+
+\subsection{OpenCTI}
+
+\begin{boxdef}
+\textbf{OpenCTI~:} Plateforme open-source de gestion et de partage de
+la CTI (Filigran, anciennement Luatix). Nativement orienté STIX~2.1.
+Interface graphique riche pour la visualisation des relations entre
+acteurs, campagnes, TTPs et indicateurs. Connecteurs vers MISP,
+VirusTotal, AlienVault OTX, Shodan, Mandiant, CIRCL.
+\end{boxdef}
+
+Complémentarité MISP / OpenCTI~:
+\begin{itemize}
+  \item \textbf{MISP~:} optimisé pour la gestion opérationnelle des IoC
+        et le partage communautaire.
+  \item \textbf{OpenCTI~:} optimisé pour l'analyse stratégique/opérationnelle,
+        la modélisation des acteurs et la visualisation des graphes de
+        relations.
+  \item Les deux s'interfacent via STIX~2.1 / API.
+\end{itemize}
+
+% ==============================================================================
+\section{Intégration CTI dans le SOC}
+\label{sec:cti-integration}
+% ==============================================================================
+
+\subsection{Enrichissement automatique du SIEM}
+
+Le cycle d'intégration CTI $\to$ SIEM suit quatre étapes~:
+
+\begin{enumerate}
+  \item \textbf{Collecte CTI.} Abonnement aux flux (MISP, OTX, abuse.ch,
+        Emerging Threats). Export périodique des IoC actifs (IP, domaines,
+        hashes) en CSV/JSON.
+  \item \textbf{Injection dans le pipeline.} Logstash translate plugin
+        ou Wazuh CDB (Custom Database) pour le lookup en temps réel lors
+        du parsing de chaque événement.
+  \item \textbf{Alerte contextualisée.} Si un événement matche un IoC CTI,
+        une alerte enrichie est générée avec le contexte~:
+        nom de la campagne, groupe attributé, niveau de confiance.
+  \item \textbf{Feedback.} Les IoC observés lors d'un incident sont
+        réintégrés dans la plateforme CTI (boucle fermée).
+\end{enumerate}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Intégration MISP $\to$ Wazuh CDB (Custom DB)},
+  label={lst:misp-wazuh}]
+# ─── Exporter les IoC de MISP vers une base CDB Wazuh ────────────────────────
+# Format CDB Wazuh : une entrée par ligne "valeur:"
+curl -s -H "Authorization: $MISP_KEY" \
+  "https://misp.lizbiz.local/attributes/restSearch/\
+returnFormat:csv/type:ip-dst/last:24h/to_ids:1" | \
+  awk -F',' 'NR>1{print $2":"}' > \
+  /var/ossec/etc/lists/malicious_ips.cdb
+
+# Compiler la base CDB
+/var/ossec/bin/ossec-makelists
+
+# ─── Règle Wazuh : alerte si IP source dans la liste CTI ─────────────────────
+# Dans /var/ossec/etc/rules/local_rules.xml :
+# <rule id="100300" level="12">
+#   <if_group>syslog,authentication</if_group>
+#   <list field="srcip" lookup="match_key">etc/lists/malicious_ips</list>
+#   <description>CTI Match: IP source dans base MISP (IOC connu)</description>
+#   <mitre><id>T1071</id></mitre>
+#   <group>cti_match,requires_triage</group>
+# </rule>
+\end{lstlisting}
+
+\subsection{Threat Intel Feeds recommandés}
+
+\begin{table}[H]
+\centering\small
+\caption{Sources de CTI technique gratuites et payantes}
+\label{tab:cti-feeds}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3.5cm}p{3cm}p{3cm}p{4cm}}
+\toprule
+\tableauHeader{Source} & \tableauHeader{Type} &
+\tableauHeader{Coût} & \tableauHeader{Contenu} \\
+\midrule
+AlienVault OTX      & STIX, CSV      & Gratuit   & IPs, domaines, hashes, URLs \\
+abuse.ch (Feodo, MalwareBazaar) & CSV & Gratuit & C2 botnets, malwares \\
+Emerging Threats    & Snort/Suricata & Gratuit + Pro & Règles IDS \\
+CIRCL (MISP feeds)  & MISP           & Gratuit   & IoC gouvernement LU \\
+VirusTotal          & API            & Freemium  & Hashes, URLs, domaines \\
+Shodan              & API            & Freemium  & Empreintes infrastructure \\
+Mandiant / Recorded Future & STIX  & Payant    & CTI opérationnelle avancée \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+\section{Évaluation et crédibilité des sources}
+\label{sec:cti-credibilite}
+% ==============================================================================
+
+Tous les IoC ne se valent pas. Un IoC doit être évalué sur cinq
+dimensions avant d'être intégré dans la production~:
+
+\begin{enumerate}
+  \item \textbf{Source.} Qui a produit l'IoC~? (CERT gouvernemental,
+        éditeur sécurité, communauté anonyme, flux automatisé).
+  \item \textbf{Confiance (\textit{confidence}).} Niveau de certitude
+        que l'IoC est valide (0--100~\%). Un IoC à faible confiance
+        ne doit pas déclencher un blocage automatique.
+  \item \textbf{Fraîcheur (\textit{freshness}).} Un IoC vieux de 6~mois
+        est probablement obsolète (infrastructure attaquant changée).
+        Durée de vie recommandée~: 30~jours pour les IPs,
+        90~jours pour les domaines, indéterminé pour les hashes.
+  \item \textbf{Contexte.} L'IoC est-il pertinent pour votre secteur,
+        votre géographie, votre architecture~?
+  \item \textbf{Faux positifs.} Un IoC partagé trop largement peut
+        inclure des IPs légitimes (CDN, cloud providers). Valider
+        systématiquement avant blocage.
+\end{enumerate}
+
+\begin{boxdef}
+\textbf{TLP (\textit{Traffic Light Protocol})~:} Système de classification
+du partage de l'information en CTI~:
+\textbf{TLP:RED}~=~destinataire uniquement~;
+\textbf{TLP:AMBER}~=~organisation et partenaires de confiance~;
+\textbf{TLP:GREEN}~=~communauté sectorielle~;
+\textbf{TLP:CLEAR}~=~partage libre.
+\end{boxdef}
+
+% ==============================================================================
+\section{CTI dans la réponse aux incidents}
+\label{sec:cti-ir}
+% ==============================================================================
+
+La CTI enrichit chaque phase de la réponse~:
+
+\begin{description}
+  \item[\textbf{Préparation~:}] Modéliser les adversaires probables
+        (secteur e-commerce, présence africaine). Configurer les
+        playbooks en tenant compte des TTPs documentés.
+  \item[\textbf{Détection~:}] Enrichissement automatique des alertes SIEM
+        avec le contexte CTI. L'alerte \og{}brute force SSH depuis
+        203.0.113.42\fg{} devient \og{}brute force SSH depuis IP appartenant
+        au groupe FIN7 (Carbanak), campagne active mars--avril~2026\fg{}.
+  \item[\textbf{Investigation~:}] Le Diamond Model guide la pivotisation~:
+        de l'IP C2 vers les autres victimes, vers l'infrastructure,
+        vers les outils, vers le groupe.
+  \item[\textbf{Éradication~:}] Les TTPs documentés permettent de savoir
+        quels autres vecteurs de persistance chercher, au-delà
+        de ceux déjà découverts.
+  \item[\textbf{RETEX~:}] Les IoC et TTPs de l'incident enrichissent
+        la plateforme CTI, bénéficiant aux organisations partenaires.
+\end{description}
+
+\begin{boxlizbiz}
+\textbf{LiZbiZ-SIS~: application CTI à l'incident du 12/04/2026}
+
+Après l'incident, l'analyste N3 a pivotisé depuis l'IP C2
+185.220.101.5 dans MISP~: cette IP était déjà référencée dans
+3~événements liés au groupe \textit{ShadowFin} (acteur spécialisé
+dans les PME e-commerce africaines). Les outils utilisés (wget + bash
++ C2 HTTPS) correspondent aux TTPs documentés de ce groupe~:
+T1059.004, T1071.001, T1105. Cette information a permis de diriger
+l'investigation vers d'autres artefacts typiques de ce groupe
+(fichiers .lnk dans \%TEMP\%, clés de registre \texttt{WindowsUpdate})
+qui n'auraient pas été cherchés sans le contexte CTI.
+\end{boxlizbiz}
+
+% ==============================================================================
+\section*{Résumé}
+% ==============================================================================
+
+\begin{boxresume}
+\begin{itemize}
+  \item CTI~: 4~niveaux (stratégique, opérationnel, tactique, technique).
+        La CTI est actionnelle~; un flux d'IoC brut n'est pas de la CTI.
+  \item IoC (réactif, court terme)~$<$~IoA (comportemental)~$<$~TTP
+        (durable). Bloquer les TTPs~: la stratégie la plus efficace
+        (pyramide de la douleur).
+  \item Modèles~: Kill Chain (7~phases séquentielles), Diamond Model
+        (Adversaire / Infrastructure / Capacité / Victime), MITRE ATT\&CK
+        (14~tactiques, $>$200~techniques).
+  \item Formats~: STIX~2.1 (représentation), TAXII (transport).
+  \item Plateformes~: MISP (partage opérationnel des IoC),
+        OpenCTI (analyse stratégique et graphe de relations).
+  \item Intégration SOC~: enrichissement SIEM via CDB Wazuh ou Logstash
+        translate~; boucle CTI fermée.
+  \item Crédibilité IoC~: source, confiance, fraîcheur, contexte, FP.
+\end{itemize}
+\end{boxresume}
+
+\begin{boxexo}
+\textbf{Ex.~9.1 — Classification des indicateurs.}
+Classez les indicateurs suivants selon le niveau CTI et le type
+(IoC / IoA / TTP)~: (a)~\texttt{sha256:3a7d4f8...}~;
+(b)~exécution de \texttt{powershell.exe -enc ...} à 03h00~;
+(c)~utilisation de l'outil Mimikatz~; (d)~campagne de phishing
+ciblant le secteur bancaire africain~; (e)~domaine \texttt{evil.io}.
+
+\medskip\textbf{Ex.~9.2 — Objet STIX.}
+Rédigez en JSON STIX~2.1 un objet \texttt{indicator} pour le domaine
+\texttt{evil.io} utilisé comme C2 lors de l'incident LiZbiZ-SIS.
+Complétez avec un objet \texttt{relationship} liant cet indicateur
+à la technique ATT\&CK T1071.001.
+
+\medskip\textbf{Ex.~9.3 — Intégration SIEM.}
+Décrivez le processus complet d'intégration d'un flux MISP dans
+Wazuh pour LiZbiZ-SIS~: script d'export, format CDB, règle Wazuh,
+alerte générée, fréquence de mise à jour recommandée.
+\end{boxexo}

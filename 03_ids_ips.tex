@@ -1,0 +1,495 @@
+% ==============================================================================
+% 03_ids_ips.tex — UE SIS589
+% ==============================================================================
+\chapter{Systèmes de Détection et de Prévention d'Intrusion}
+\label{chap:ids}
+
+\epigraph{\itshape « Un IDS sans analyste est une alarme sans gardien. »}
+         {--- Proverbe SOC}
+
+\begin{boxobjectifs}
+\begin{enumerate}
+  \item Distinguer IDS, IPS, NIDS, HIDS, EDR, XDR et NDR selon leur positionnement
+        et leur mode de détection.
+  \item Décrire les deux paradigmes de détection~: signatures vs anomalies.
+  \item Lire et interpréter les alertes Snort/Suricata~; écrire une règle simple.
+  \item Comprendre le fonctionnement d'un HIDS basé sur FIM et détection
+        comportementale (Wazuh).
+  \item Positionner les capteurs IDS dans une architecture réseau segmentée.
+  \item Identifier les limites et techniques d'évasion des IDS classiques.
+\end{enumerate}
+\end{boxobjectifs}
+
+% ==============================================================================
+\section{Taxonomie des systèmes de détection}
+\label{sec:ids-taxo}
+% ==============================================================================
+
+\subsection{Positionnement dans la défense en profondeur}
+
+Les systèmes de détection constituent la deuxième ligne de défense~: là
+où les contrôles préventifs (firewall, antivirus, hardening) cherchent à
+\textbf{empêcher}, les IDS/IPS cherchent à \textbf{détecter} ce qui a
+franchi ou contourné ces barrières.
+
+\begin{table}[H]
+\centering\small
+\caption{Taxonomie des systèmes de détection et de prévention d'intrusion}
+\label{tab:ids-taxo}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{1.8cm}p{5cm}p{3.5cm}p{3.5cm}}
+\toprule
+\tableauHeader{Sigle} & \tableauHeader{Définition} &
+\tableauHeader{Positionnement} & \tableauHeader{Action} \\
+\midrule
+\textbf{NIDS} & \textit{Network IDS} --- analyse le trafic réseau &
+En coupure (inline) ou en écoute (\textit{span/tap}) & Alerte uniquement \\
+\textbf{NIPS} & \textit{Network IPS} --- variante préventive du NIDS &
+En coupure obligatoire & Alerte + blocage actif \\
+\textbf{HIDS} & \textit{Host-based IDS} --- agent sur le système &
+Sur chaque hôte surveillé & Alerte (FIM, logs, comportement) \\
+\textbf{HIPS} & \textit{Host-based IPS} --- variante active &
+Sur chaque hôte & Alerte + isolation processus \\
+\textbf{EDR}  & \textit{Endpoint Detection \& Response} &
+Agent hôte + console cloud & Détection + réponse automatisée \\
+\textbf{NDR}  & \textit{Network Detection \& Response} &
+Analyse flux réseau (NetFlow, PCAP) & Détection comportementale réseau \\
+\textbf{XDR}  & \textit{Extended Detection \& Response} &
+Corrélation HIDS + NIDS + SIEM + CTI & Réponse unifiée multi-couche \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Mode passif vs mode inline}
+
+\begin{description}
+  \item[\termecle{Mode passif (tap/span)}] Le capteur reçoit une copie du
+        trafic via un port miroir (SPAN) du switch ou un TAP optique.
+        \textbf{Zéro impact sur la latence réseau.} Peut seulement alerter,
+        pas bloquer. Mode recommandé pour un premier déploiement.
+  \item[\termecle{Mode inline (IPS)}] Le capteur est inséré physiquement
+        dans le flux réseau~: tout paquet le traverse.
+        \textbf{Peut bloquer en temps réel.} Introduit une latence et un
+        point de défaillance unique~: une panne de l'IPS coupe le réseau.
+        Nécessite une configuration de \textit{bypass} matériel.
+\end{description}
+
+% ==============================================================================
+\section{Paradigmes de détection}
+\label{sec:ids-paradigmes}
+% ==============================================================================
+
+\subsection{Détection par signatures}
+
+\begin{boxdef}
+\textbf{Détection par signatures~:} Comparaison du trafic ou du comportement
+observé avec une base de règles décrivant des patterns d'attaques connus.
+Analogie~: l'antivirus à base de hash. Efficace pour les menaces connues~;
+aveugle aux menaces inconnues (\textit{zero-day}) et aux variantes légèrement
+modifiées.
+\end{boxdef}
+
+Avantages~: faible taux de faux positifs, déterminisme, explicabilité.
+Inconvénients~: inefficace contre les zero-days, nécessite une mise à jour
+permanente des signatures.
+
+\subsection{Détection par anomalies}
+
+\begin{boxdef}
+\textbf{Détection par anomalies (comportementale)~:} Établissement d'une
+\textit{baseline} du comportement normal (volume de trafic, ports utilisés,
+horaires de connexion, patterns applicatifs), puis détection de toute déviation
+statistiquement significative. Peut détecter des attaques inconnues~; génère
+davantage de faux positifs pendant la phase d'apprentissage.
+\end{boxdef}
+
+Avantages~: capable de détecter des menaces inconnues et des attaques lentes
+(\textit{slow and low}).
+Inconvénients~: faux positifs élevés, opacité des modèles ML, phase
+d'apprentissage longue (2--4~semaines typiquement).
+
+\begin{boiteRemarque}{Complémentarité signatures et anomalies}
+Les SIEM et EDR modernes combinent les deux approches~: signatures pour la
+détection rapide et déterministe des menaces connues~; anomalies (souvent
+via ML/UEBA) pour la détection de comportements déviants de comptes
+compromis ou d'insiders malveillants. Cette complémentarité réduit les angles
+morts de chaque approche individuelle.
+\end{boiteRemarque}
+
+% ==============================================================================
+\section{Snort / Suricata~: NIDS open-source}
+\label{sec:snort-suricata}
+% ==============================================================================
+
+\subsection{Présentation}
+
+\textbf{Snort} (Cisco, 1998) et \textbf{Suricata} (OISF, 2010) sont les deux
+NIDS/NIPS open-source de référence. Suricata est multi-thread et supporte
+nativement le protocole EVE-JSON pour l'intégration SIEM. Les deux utilisent
+une syntaxe de règles compatible et partagent les mêmes jeux de règles
+communautaires (Emerging Threats, Snort Community Rules).
+
+\subsection{Anatomie d'une règle Suricata}
+
+\begin{lstlisting}[style=StyleCode,
+  caption={Anatomie d'une règle Suricata},
+  label={lst:suricata-rule}]
+# Syntaxe :
+# action proto src_ip src_port direction dst_ip dst_port (options)
+
+alert tcp any any -> $HOME_NET 22 (
+  msg:"SCAN SSH Brute Force Attempt";
+  flow:to_server;
+  threshold:type threshold, track by_src, count 5, seconds 60;
+  classtype:attempted-admin;
+  sid:2001219;
+  rev:12;
+  metadata:affected_product SSH, attack_target Server,
+            deployment Perimeter, signature_severity Major,
+            mitre_attack T1110.001;
+)
+\end{lstlisting}
+
+\begin{table}[H]
+\centering\small
+\caption{Champs d'une règle Suricata}
+\label{tab:suricata-champs}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{2.5cm}p{4cm}p{7cm}}
+\toprule
+\tableauHeader{Champ} & \tableauHeader{Valeurs possibles} &
+\tableauHeader{Description} \\
+\midrule
+\texttt{action}   & alert, pass, drop, reject &
+Que faire quand la règle matche \\
+\texttt{proto}    & tcp, udp, icmp, http, dns, tls &
+Protocole réseau ou applicatif (Suricata supporte L7) \\
+\texttt{src/dst}  & IP, CIDR, variables (\$HOME\_NET) &
+Filtrage source et destination \\
+\texttt{msg}      & Texte libre &
+Description affichée dans l'alerte \\
+\texttt{content}  & Chaîne ou hex &
+Contenu recherché dans le payload \\
+\texttt{sid}      & Entier unique &
+Identifiant unique de la règle \\
+\texttt{classtype}& attempted-admin, etc. &
+Catégorie de l'alerte \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}[style=StyleCode,
+  caption={Règles Suricata utiles pour LiZbiZ-SIS},
+  label={lst:suricata-rules-lizbiz}]
+# ─── Détection scan de ports SYN ────────────────────────────────────────────
+alert tcp any any -> $HOME_NET any (
+  msg:"SCAN SYN Portscan Detected";
+  flags:S,12; threshold:type both, track by_src, count 20, seconds 3;
+  classtype:network-scan; sid:9000001; rev:1;)
+
+# ─── SQLi dans requêtes HTTP (payload) ─────────────────────────────────────
+alert http $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (
+  msg:"SQLI Union Select Detected";
+  flow:established,to_server;
+  http.uri; content:"UNION"; nocase; content:"SELECT"; nocase; distance:0;
+  classtype:web-application-attack; sid:9000002; rev:1;)
+
+# ─── Connexion vers nœud TOR (exit node connu) ──────────────────────────────
+alert ip $HOME_NET any -> $TOR_EXIT_NODES any (
+  msg:"POLICY Connexion vers noeud TOR sortant";
+  classtype:policy-violation; sid:9000003; rev:1;)
+
+# ─── Détection Cobalt Strike beacon (JA3 hash connu) ───────────────────────
+alert tls any any -> any any (
+  msg:"MALWARE Cobalt Strike Beacon TLS";
+  ja3.hash; content:"a0e9f5d64349fb13191bc781f81f42e1";
+  classtype:trojan-activity; sid:9000004; rev:1;)
+\end{lstlisting}
+
+\subsection{Format d'alerte EVE-JSON}
+
+Suricata produit les alertes au format EVE-JSON, directement ingérable
+par le SIEM~:
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Alerte EVE-JSON Suricata},
+  label={lst:eve-json}]
+{
+  "timestamp"     : "2026-04-12T03:14:22.000000+0000",
+  "flow_id"       : 1234567890,
+  "in_iface"      : "em0",
+  "event_type"    : "alert",
+  "src_ip"        : "203.0.113.42",
+  "src_port"      : 54321,
+  "dest_ip"       : "10.0.1.10",
+  "dest_port"     : 22,
+  "proto"         : "TCP",
+  "alert"         : {
+    "action"      : "allowed",
+    "gid"         : 1,
+    "signature_id": 9000001,
+    "rev"         : 1,
+    "signature"   : "SCAN SYN Portscan Detected",
+    "category"    : "Network Scan",
+    "severity"    : 2
+  },
+  "flow"          : { "pkts_toserver": 23, "pkts_toclient": 0 }
+}
+\end{lstlisting}
+
+% ==============================================================================
+\section{HIDS~: détection sur l'hôte}
+\label{sec:hids}
+% ==============================================================================
+
+\subsection{Principes}
+
+Un HIDS analyse des données locales à l'hôte~:
+\begin{itemize}
+  \item \textbf{FIM (\textit{File Integrity Monitoring})~:} calcul
+        périodique de hash sur les fichiers système critiques~;
+        alerte si une modification non autorisée est détectée.
+  \item \textbf{Surveillance des journaux~:} analyse des logs locaux
+        en temps réel (auth.log, Event Viewer).
+  \item \textbf{Détection de rootkits~:} recherche de processus cachés,
+        fichiers invisibles, hooks dans le noyau.
+  \item \textbf{Conformité~:} vérification des configurations vs benchmarks
+        CIS, PCI-DSS, ISO~27001.
+\end{itemize}
+
+\subsection{Wazuh~: HIDS open-source de référence}
+
+\begin{boxdef}
+\textbf{Wazuh~:} Plateforme open-source combinant HIDS (agent), SIEM léger,
+FIM, détection de conformité et intégration avec MITRE ATT\&CK. Architecture
+Manager/Agent~: l'agent collecte et transmet~; le manager corrèle et alerte.
+Compatible Linux, Windows, macOS, Docker, Kubernetes.
+\end{boxdef}
+
+\begin{lstlisting}[style=StyleCode, language=YAML,
+  caption={Configuration Wazuh --- FIM et détection rootkits},
+  label={lst:wazuh-config}]
+<!-- /var/ossec/etc/ossec.conf (extrait) -->
+<ossec_config>
+
+  <!-- FIM : surveiller les fichiers système critiques -->
+  <syscheck>
+    <frequency>3600</frequency>  <!-- verif toutes les heures -->
+    <directories check_all="yes" report_changes="yes" realtime="yes">
+      /etc,/usr/bin,/usr/sbin,/bin,/sbin
+    </directories>
+    <!-- Windows : fichiers systeme et registre -->
+    <directories check_all="yes">%WINDIR%/System32</directories>
+    <registry>HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run</registry>
+    <!-- Exclusions légitimes -->
+    <ignore>/etc/mtab</ignore>
+    <ignore>/etc/hosts.deny</ignore>
+  </syscheck>
+
+  <!-- Détection de rootkits -->
+  <rootcheck>
+    <frequency>43200</frequency>  <!-- 2 fois / jour -->
+    <check_files>yes</check_files>
+    <check_trojans>yes</check_trojans>
+    <check_dev>yes</check_dev>
+    <check_sys>yes</check_sys>
+    <check_pids>yes</check_pids>
+    <check_ports>yes</check_ports>
+    <check_if>yes</check_if>
+  </rootcheck>
+
+  <!-- Commandes personnalisées (audit de comptes) -->
+  <localfile>
+    <log_format>command</log_format>
+    <command>last -n 20</command>
+    <frequency>360</frequency>
+  </localfile>
+
+</ossec_config>
+\end{lstlisting}
+
+% ==============================================================================
+\section{EDR~: détection avancée sur le poste}
+\label{sec:edr}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{EDR (\textit{Endpoint Detection and Response})~:} Agent installé sur
+chaque poste/serveur qui capture en continu la télémétrie comportementale
+(processus, connexions réseau, accès fichiers, modifications de registre,
+appels système), la transmet à une console centralisée pour corrélation,
+et offre des capacités de réponse distante~: isolation réseau, kill de
+processus, collecte de fichiers suspects.
+\end{boxdef}
+
+\begin{table}[H]
+\centering\small
+\caption{Comparaison antivirus classique vs EDR}
+\label{tab:av-vs-edr}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{4cm}p{5cm}p{5cm}}
+\toprule
+\tableauHeader{Critère} & \tableauHeader{Antivirus classique} &
+\tableauHeader{EDR} \\
+\midrule
+Mode de détection & Signatures (hashes, patterns) &
+Signatures + comportement + ML \\
+Télémétrie & Événements fichiers uniquement &
+Processus, réseau, mémoire, registre \\
+Malwares \textit{fileless} & Non détecté &
+Détecté (injection mémoire, LOLBins) \\
+Réponse & Quarantaine fichier & Isolation réseau, kill process, forensics \\
+Threat hunting & Non applicable & Requêtes sur l'historique comportemental \\
+Déploiement & Agent léger & Agent avec overhead variable (5--15\% CPU) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Solutions de référence~: \textbf{CrowdStrike Falcon}, \textbf{SentinelOne},
+\textbf{Microsoft Defender for Endpoint}, \textbf{Elastic EDR} (open-source
+partiel), \textbf{Velociraptor} (open-source, investigation forensique).
+
+% ==============================================================================
+\section{Positionnement des capteurs dans l'architecture réseau}
+\label{sec:ids-positionnement}
+% ==============================================================================
+
+Le positionnement des capteurs IDS/IPS détermine leur visibilité et leur
+efficacité. Pour une architecture segmentée en VLAN (cas LiZbiZ-SIS)~:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  zone/.style={rectangle,draw=CouleurPrimaire,fill=CouleurDef,
+               rounded corners,minimum width=5cm,minimum height=0.8cm,
+               font=\small\bfseries},
+  ids/.style={rectangle,draw=CouleurBordAlerte,fill=CouleurAlerte,
+              rounded corners,minimum width=2.8cm,minimum height=0.7cm,
+              font=\small\bfseries},
+  arrow/.style={-Stealth,thick,color=CouleurSecondaire}]
+
+\node[zone] (inet)  at (0, 5)   {Internet};
+\node[ids]  (nids1) at (3.5, 5) {NIDS\#1\\(périmètre)};
+\node[zone] (fw)    at (0, 3.5) {Firewall pfSense};
+\node[zone] (dmz)   at (0, 2)   {VLAN~10~: DMZ\\(Apache, Nginx)};
+\node[ids]  (nids2) at (3.5, 2) {NIDS\#2\\(DMZ $\leftrightarrow$ LAN)};
+\node[zone] (app)   at (0, 0.5) {VLAN~20~: Applicatif\\(ERP, MySQL)};
+\node[zone] (usr)   at (0,-1)   {VLAN~30~: Utilisateurs\\(AD, postes)};
+\node[ids]  (hids)  at (3.5,-0.3) {HIDS (Wazuh)\\sur chaque hôte};
+
+\draw[arrow] (inet) -- (fw);
+\draw[arrow] (fw)   -- (dmz);
+\draw[arrow] (dmz)  -- (app);
+\draw[arrow] (app)  -- (usr);
+
+\draw[dashed,color=CouleurAccent] (nids1) -- (0.7,5);
+\draw[dashed,color=CouleurAccent] (nids2) -- (0.7,2);
+\draw[dashed,color=CouleurBordForensic] (hids) -- (0.7,0.5);
+\draw[dashed,color=CouleurBordForensic] (hids.south) -- (0.7,-1);
+
+\node[font=\tiny\itshape,color=CouleurBordAlerte] at (5.5,4.6)
+  {Trafic N/S entrant};
+\node[font=\tiny\itshape,color=CouleurBordAlerte] at (5.5,1.6)
+  {Trafic DMZ$\to$LAN};
+\node[font=\tiny\itshape,color=CouleurBordForensic] at (5.5,-0.3)
+  {Télémétrie hôte};
+\end{tikzpicture}
+\caption{Positionnement des capteurs IDS dans l'architecture LiZbiZ-SIS}
+\label{fig:ids-positionnement}
+\end{figure}
+
+\begin{itemize}
+  \item \textbf{NIDS\#1 (périmètre)~:} Capture le trafic entre Internet
+        et le firewall. Visibilité sur les attaques entrantes brutes.
+  \item \textbf{NIDS\#2 (inter-VLAN)~:} Capture les flux entre la DMZ
+        et les VLANs internes. Détecte les pivots et mouvements latéraux.
+  \item \textbf{HIDS (Wazuh)~:} Déployé sur chaque serveur. Détecte
+        les attaques qui ont franchi le réseau (modifications locales,
+        exécutions suspectes, FIM).
+\end{itemize}
+
+% ==============================================================================
+\section{Limites et techniques d'évasion des IDS}
+\label{sec:ids-evasion}
+% ==============================================================================
+
+La connaissance des limites des IDS est indispensable pour les configurer
+correctement et interpréter leurs silences.
+
+\begin{table}[H]
+\centering\small
+\caption{Techniques d'évasion des IDS et contre-mesures}
+\label{tab:ids-evasion}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3.5cm}p{5cm}p{5cm}}
+\toprule
+\tableauHeader{Technique (MITRE)} & \tableauHeader{Description} &
+\tableauHeader{Contre-mesure} \\
+\midrule
+Fragmentation IP (T1001.002) &
+Découpage du payload en fragments pour éviter les patterns &
+Réassemblage IP avant inspection (IPS inline) \\
+Encodage (T1027) &
+Base64, XOR, Unicode pour masquer le contenu &
+Décodage applicatif L7 dans l'IDS \\
+Chiffrement TLS (T1573) &
+Payload chiffré, signatures inefficaces &
+Inspection TLS (TLS MITM), analyse JA3/JA3S \\
+Trafic lent (\textit{slow scan}) &
+Une sonde par heure, en dessous des seuils &
+Fenêtres temporelles longues, UEBA \\
+Living off the Land (T1218) &
+Outils légitimes (powershell, certutil) &
+Surveillance comportementale, liste blanche \\
+Obfuscation réseau &
+Tunneling DNS, ICMP, HTTPS &
+Inspection protocolaire, analyse entropie \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{boiteRemarque}{TLS et inspection}
+Plus de 90\% du trafic Internet est aujourd'hui chiffré (TLS~1.3).
+Un NIDS classique ne voit que les métadonnées (IP, ports, durée, volume)
+et l'empreinte TLS (JA3 hash), pas le contenu. L'inspection TLS profonde
+nécessite un proxy d'interception (MITM) avec implications légales et
+de confidentialité. L'analyse JA3 permet de fingerprinter le client
+et de détecter certains outils offensifs connus.
+\end{boiteRemarque}
+
+% ==============================================================================
+\section*{Résumé}
+% ==============================================================================
+
+\begin{boxresume}
+\begin{itemize}
+  \item NIDS (réseau), HIDS (hôte), EDR (endpoint avancé), NDR (réseau
+        comportemental), XDR (corrélation unifiée).
+  \item Deux paradigmes~: signatures (menaces connues, peu de FP) et
+        anomalies (menaces inconnues, FP élevés pendant l'apprentissage).
+  \item Snort/Suricata~: syntaxe action/proto/src/dst/(options). Format
+        EVE-JSON pour l'intégration SIEM.
+  \item HIDS Wazuh~: FIM, surveillance logs, rootkits, conformité CIS.
+  \item EDR~: télémétrie comportementale complète, détection
+        \textit{fileless}, réponse distante.
+  \item Positionnement~: périmètre (N/S), inter-VLAN (E/O), agent hôte.
+  \item Limites~: fragmentation, chiffrement TLS, trafic lent, LOLBins.
+\end{itemize}
+\end{boxresume}
+
+\begin{boxexo}
+\textbf{Ex.~3.1 — Écriture de règle Suricata.}
+Rédigez une règle Suricata détectant une tentative de \textit{reverse shell}
+Netcat (\texttt{nc -e /bin/bash}) vers un port non standard (hors 80/443/22)
+depuis le VLAN~20. Spécifiez action, mapping MITRE et SID unique.
+
+\medskip\textbf{Ex.~3.2 — Analyse d'alerte EVE-JSON.}
+À partir de l'alerte ci-dessous (fournie en TP), identifiez~:
+(a)~l'attaque probable~; (b)~le TTP MITRE~; (c)~si le trafic est bloqué
+ou seulement alerté~; (d)~les 3~étapes de qualification à suivre en N1.
+
+\medskip\textbf{Ex.~3.3 — Plan de déploiement IDS.}
+Proposez un plan de déploiement IDS/HIDS complet pour LiZbiZ-SIS en
+précisant~: localisation de chaque capteur, mode (tap ou inline), type
+(NIDS, HIDS, EDR), règles prioritaires à activer et métriques de suivi.
+\end{boxexo}

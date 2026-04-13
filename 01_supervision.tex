@@ -1,0 +1,512 @@
+% ==============================================================================
+% 01_supervision.tex — UE SIS589
+% ==============================================================================
+\chapter{Supervision des Systèmes d'Information}
+\label{chap:supervision}
+
+\epigraph{\itshape « On ne peut défendre ce qu'on ne voit pas. »}
+         {--- Principe fondateur de la supervision active}
+
+\begin{boxobjectifs}
+\begin{enumerate}
+  \item Distinguer supervision, monitoring et surveillance~; positionner chaque
+        concept dans le cycle de sécurité opérationnelle.
+  \item Décrire l'architecture fonctionnelle d'un SOC et ses modèles
+        organisationnels.
+  \item Identifier les sources de données d'un SIEM et comprendre le pipeline
+        de traitement événement~$\to$~alerte.
+  \item Définir et calculer les métriques fondamentales~: MTTD, MTTR, FPR,
+        couverture MITRE ATT\&CK.
+  \item Appliquer la grille de maturité SOC à LiZbiZ-SIS.
+\end{enumerate}
+\end{boxobjectifs}
+
+% ==============================================================================
+\section{Fondements conceptuels}
+\label{sec:superv-fondements}
+% ==============================================================================
+
+\subsection{Définitions structurantes}
+
+\begin{boxdef}
+\textbf{Supervision de la sécurité~:} Ensemble des processus, outils et pratiques
+permettant d'observer en continu l'état du SI, de détecter toute déviation par
+rapport à une \textit{baseline} de comportement normal, et de déclencher une réponse
+dans un délai compatible avec les objectifs de l'organisation.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{Événement de sécurité (\textit{Security Event})~:} Changement observable
+d'état dans un composant du SI susceptible d'avoir une incidence sur la sécurité.
+Un événement n'est pas, par définition, un incident.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{Incident de sécurité~:} Événement ou série d'événements confirmés portant
+atteinte — ou susceptibles de porter atteinte — à la confidentialité, l'intégrité ou
+la disponibilité du SI (définition ISO~27035). Tout incident est un événement~;
+tout événement n'est pas un incident.
+\end{boxdef}
+
+La supervision opère à trois niveaux~:
+
+\begin{enumerate}
+  \item \textbf{Disponibilité~:} ping, healthcheck, état des processus.
+        Outils~: Nagios, Zabbix, Prometheus.
+  \item \textbf{Performance~:} CPU, mémoire, bande passante, temps de réponse.
+        Outils~: Grafana, Datadog, Elastic APM.
+  \item \textbf{Sécurité~:} analyse des journaux, corrélation, détection
+        comportementale. Outil central~: \textbf{SIEM}. Objet de ce cours.
+\end{enumerate}
+
+\subsection{Le paradigme \textit{assume breach}}
+
+\begin{boxdef}
+\textit{\textbf{Assume breach}~:} Posture de sécurité consistant à considérer
+que l'attaquant est potentiellement déjà présent dans le SI. L'objectif ne
+se limite plus à empêcher l'intrusion mais à \textbf{détecter et contenir}
+avant que l'attaquant n'atteigne ses objectifs.
+\end{boxdef}
+
+Ce paradigme impose trois conséquences opérationnelles~:
+\begin{itemize}
+  \item La surveillance interne (est-ouest) devient aussi critique que
+        la surveillance périmétrique (nord-sud).
+  \item Le \termecle{temps de séjour} (\textit{dwell time}) — durée entre
+        compromission initiale et détection — devient l'indicateur de
+        performance dominant.
+  \item Le \textit{threat hunting} proactif complète la détection réactive
+        par alertes.
+\end{itemize}
+
+\begin{boiteRemarque}{Temps de séjour~: chiffres de référence}
+Mandiant M-Trends 2024~: médiane du \textit{dwell time} mondiale à
+\textbf{10~jours} (amélioration significative vs 21~jours en 2023,
+101~jours en 2013). En Afrique subsaharienne, les estimations sectorielles
+restent proches de 30~jours faute de capacités de détection déployées.
+La réduction de ce délai est l'objectif mesurable n°~1 de tout SOC.
+\end{boiteRemarque}
+
+% ==============================================================================
+\section{Le Security Operations Center (SOC)}
+\label{sec:soc}
+% ==============================================================================
+
+\subsection{Définition et mission}
+
+\begin{boxdef}
+\textbf{SOC (\textit{Security Operations Center})~:} Structure organisationnelle
+— équipe humaine, processus et technologie — dédiée à la surveillance continue du
+SI, à la détection des menaces, à l'analyse des alertes et à la coordination des
+réponses aux incidents. Disponibilité cible~: 24h/24, 7j/7.
+\end{boxdef}
+
+Le SOC n'est pas un outil~: c'est une \textbf{capacité opérationnelle}. Son
+efficacité repose sur trois piliers interdépendants~:
+\begin{itemize}
+  \item \textbf{Personnes~:} analystes N1/N2/N3, ingénieurs détection, manager SOC.
+  \item \textbf{Processus~:} procédures, playbooks, escalades, SLA.
+  \item \textbf{Technologie~:} SIEM, EDR, threat intelligence, SOAR.
+\end{itemize}
+
+\subsection{Niveaux d'analyse}
+
+\begin{table}[H]
+\centering\small
+\caption{Niveaux d'analyse dans un SOC}
+\label{tab:soc-tiers}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{1.3cm}p{3.2cm}p{6.5cm}p{2.5cm}}
+\toprule
+\tableauHeader{Niveau} & \tableauHeader{Rôle} &
+\tableauHeader{Activités principales} & \tableauHeader{Outillage} \\
+\midrule
+\textbf{N1} & Analyste de triage &
+Surveillance tableaux de bord, qualification alertes, escalade N2,
+création et documentation des tickets &
+SIEM, ticketing \\
+\textbf{N2} & Analyste d'investigation &
+Analyse approfondie des alertes escaladées, investigation incidents
+confirmés, corrélation avancée, recommandation confinement &
+SIEM, EDR, sandbox \\
+\textbf{N3} & Expert / Threat Hunter &
+Investigation forensique, threat hunting proactif, développement règles
+de détection, veille CTI &
+Outils forensiques, CTI, SOAR \\
+\textbf{Manager} & Direction opérationnelle &
+Pilotage KPI, liaison RSSI/DG, gestion escalades critiques, reporting &
+Tableaux de bord \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Modèles organisationnels}
+
+\begin{description}
+  \item[\termecle{SOC interne}] Équipe dédiée, opérée par l'organisation.
+        Avantage~: connaissance métier profonde, contrôle total.
+        Inconvénient~: coût élevé (recrutement, rétention), couverture 24/7 difficile.
+  \item[\termecle{SOC externalisé (MSSP)}] \textit{Managed Security Service Provider}.
+        Avantage~: disponibilité immédiate, mutualisation des ressources.
+        Inconvénient~: moindre connaissance métier, dépendance contractuelle.
+  \item[\termecle{SOC hybride}] Équipe interne pour la connaissance métier et les
+        escalades~; MSSP pour la surveillance nocturne et week-end. Modèle dominant
+        dans les organisations de taille intermédiaire.
+  \item[\termecle{Virtual SOC (vSOC)}] Équipe distribuée géographiquement,
+        sans salle physique dédiée. Rendu viable par les plateformes SIEM cloud.
+\end{description}
+
+\subsection{Architecture technique}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  box/.style={rectangle, rounded corners=3pt, draw=CouleurPrimaire,
+              fill=CouleurDef, minimum width=2.9cm, minimum height=0.75cm,
+              font=\small\bfseries, text centered},
+  arrow/.style={-Stealth, thick, color=CouleurSecondaire}]
+
+\node[box,fill=CouleurLizbiz,draw=CouleurBordLizbiz] (fw)  at (-5, 2.2) {Firewalls/IDS};
+\node[box,fill=CouleurLizbiz,draw=CouleurBordLizbiz] (srv) at (-5, 0.7) {Serveurs OS};
+\node[box,fill=CouleurLizbiz,draw=CouleurBordLizbiz] (app) at (-5,-0.8) {Applications};
+\node[box,fill=CouleurLizbiz,draw=CouleurBordLizbiz] (edr) at (-5,-2.3) {EDR / AV};
+
+\node[box,minimum width=2.4cm,fill=CouleurSiem,draw=CouleurBordSiem]
+  (col) at (-1.2,-0.2) {Collecteur\\(Agent/Syslog)};
+
+\node[box,minimum width=3.8cm,minimum height=1.3cm,
+      fill=CouleurPrimaire,draw=CouleurPrimaire,text=white]
+  (siem) at (2.8,-0.2) {\Large\textbf{SIEM}};
+
+\node[box,fill=CouleurAlerte,draw=CouleurBordAlerte] (alert)  at (6.5, 1.2) {Alertes};
+\node[box,fill=CouleurInfo,  draw=CouleurBordInfo]   (dash)   at (6.5,-0.2) {Dashboards};
+\node[box,fill=CouleurInfo,  draw=CouleurBordInfo]   (report) at (6.5,-1.6) {Rapports};
+\node[box,fill=CouleurForensic,draw=CouleurBordForensic,minimum width=2.4cm]
+  (soar) at (2.8, 2.2) {SOAR / Ticketing};
+
+\foreach \s in {fw,srv,app,edr} \draw[arrow] (\s) -- (col);
+\draw[arrow] (col)  -- (siem);
+\draw[arrow] (siem) -- (alert);
+\draw[arrow] (siem) -- (dash);
+\draw[arrow] (siem) -- (report);
+\draw[arrow] (siem) -- (soar);
+
+\node[font=\tiny\itshape,color=CouleurBordInfo] at (-3.0,-1.0) {Normalisation ECS/CEF};
+\node[font=\tiny\itshape,color=CouleurBordInfo] at (4.8, 0.5) {Corrélation + enrichissement};
+\end{tikzpicture}
+\caption{Architecture type d'un SOC~: de la collecte à l'alerte}
+\label{fig:soc-archi}
+\end{figure}
+
+\begin{boxlizbiz}
+\textbf{LiZbiZ-SIS~: SOC minimal cible}
+
+Contraintes~: budget $<$ 5~M~FCFA/an, 2~techniciens disponibles,
+couverture heures ouvrables + astreinte. Solution retenue~:
+\textbf{Wazuh~Manager + ELK Stack} (open-source)~; agents sur les
+serveurs Windows (AD, ERP) et Linux (Apache, MySQL)~; Kibana pour la
+visualisation~; TheHive pour le ticketing~; OpenCTI pour la CTI.
+Objectif~: niveau~3 de maturité (tableau~\ref{tab:soc-maturite})
+à l'issue des laboratoires.
+\end{boxlizbiz}
+
+% ==============================================================================
+\section{Le SIEM~: cœur technique}
+\label{sec:siem}
+% ==============================================================================
+
+\subsection{Définition et pipeline}
+
+\begin{boxdef}
+\textbf{SIEM (\textit{Security Information and Event Management})~:}
+Plateforme centralisant la collecte de journaux issus de sources hétérogènes,
+les normalisant dans un format commun, les corrélant selon des règles
+ou des modèles comportementaux, et générant des alertes lorsqu'un scénario
+de menace est détecté.
+\end{boxdef}
+
+Le pipeline de traitement en six étapes~:
+
+\begin{enumerate}
+  \item \textbf{Collecte.} Syslog UDP/TCP~514, agent propriétaire, API REST,
+        fichier plat.
+  \item \textbf{Parsing.} Décomposition de la ligne brute en champs structurés
+        (timestamp, IP source, utilisateur, action, statut).
+  \item \textbf{Normalisation.} Conversion vers un schéma commun~: ECS
+        (Elastic Common Schema), CEF (ArcSight), LEEF (QRadar). Horodatage UTC.
+  \item \textbf{Enrichissement.} Géolocalisation IP, résolution DNS inverse,
+        lookup CTI (IoC connus), classe de l'actif dans le CMDB.
+  \item \textbf{Corrélation.} Application des règles de détection sur des fenêtres
+        temporelles~: \og{}5~échecs d'authentification depuis la même IP
+        en 60~secondes\fg{}.
+  \item \textbf{Alerte.} Création de ticket, notification analyste N1,
+        déclenchement optionnel d'une action SOAR.
+\end{enumerate}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Log brut Apache $\to$ événement normalisé ECS $\to$ enrichi CTI},
+  label={lst:siem-pipeline}]
+# 1. Ligne brute (Apache Combined Log)
+203.0.113.42 - - [12/Apr/2026:03:14:22 +0000] \
+  "POST /wp-login.php HTTP/1.1" 401 1234 \
+  "-" "sqlmap/1.7 (https://sqlmap.org)"
+
+# 2. Après parsing + normalisation ECS (Logstash grok)
+{
+  "@timestamp"                  : "2026-04-12T03:14:22Z",
+  "source.ip"                   : "203.0.113.42",
+  "url.path"                    : "/wp-login.php",
+  "http.request.method"         : "POST",
+  "http.response.status_code"   : 401,
+  "event.outcome"               : "failure",
+  "event.category"              : "authentication",
+  "user_agent.original"         : "sqlmap/1.7"
+}
+
+# 3. Après enrichissement CTI (lookup AlienVault OTX)
+{
+  "source.geo.country_iso_code" : "RU",
+  "threat.indicator.type"       : "ip",
+  "threat.feed.name"            : "AlienVault OTX",
+  "threat.indicator.confidence" : 85,
+  "tags"                        : ["sqlmap","brute_force_candidate"]
+}
+\end{lstlisting}
+
+\subsection{Sources d'événements prioritaires}
+
+\begin{table}[H]
+\centering\small
+\caption{Sources SIEM et menaces détectables}
+\label{tab:sources-siem}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3cm}p{3.2cm}p{7.3cm}}
+\toprule
+\tableauHeader{Source} & \tableauHeader{Format} &
+\tableauHeader{Menaces détectables} \\
+\midrule
+Firewall / UTM    & Syslog CEF     & Flux bloqués, scan de ports, exfiltration \\
+Serveur Windows   & WEF, Event IDs & Brute force (4625), création compte (4720),
+                                     élévation (4672), effacement log (1102) \\
+Serveur Linux     & Syslog, auth.log & SSH brute force, sudo anormal, cron suspect \\
+Application web   & Apache/Nginx log & SQLi, scanner web, codes 4xx en masse \\
+Active Directory  & LDAP/Kerberos  & Pass-the-hash, Kerberoasting, LDAP recon \\
+EDR / AV          & Agent propre   & Malware, injection mémoire, process hollow \\
+DNS               & Bind/Windows   & DGA, DNS tunneling, exfiltration \\
+Proxy / DLP       & ICAP/Syslog    & Fuite de données, catégories interdites \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Solutions SIEM de référence}
+
+\begin{description}
+  \item[\termecle{Splunk}] Leader commercial, langage SPL expressif.
+        Coût proportionnel au volume ingéré (TB/jour).
+  \item[\termecle{Elastic SIEM (ELK)}] Open-source. Elasticsearch + Logstash
+        + Kibana + Elastic Security. Solution privilégiée pour les
+        budgets contraints. Déployée pour LiZbiZ-SIS.
+  \item[\termecle{IBM QRadar}] Robuste, présent dans les grandes entreprises
+        et administrations africaines. Gestion native des \textit{offenses}.
+  \item[\termecle{Microsoft Sentinel}] SIEM cloud-native Azure.
+        Intégration native M365, Azure AD, Defender. Facturation à l'ingestion.
+  \item[\termecle{Wazuh}] HIDS/SIEM open-source, agent unifié (FIM, compliance,
+        détection d'intrusion). Déployé comme couche de collecte et de
+        corrélation dans LiZbiZ-SIS.
+\end{description}
+
+% ==============================================================================
+\section{Règles de corrélation}
+\label{sec:regles-correlation}
+% ==============================================================================
+
+\subsection{Structure d'une règle}
+
+Une règle de détection est définie par cinq attributs~:
+\begin{enumerate}
+  \item \textbf{Condition logique~:} combinaison d'événements (ET, OU, séquence,
+        négation).
+  \item \textbf{Fenêtre temporelle~:} durée dans laquelle les événements
+        corrélés doivent survenir.
+  \item \textbf{Seuil~:} nombre d'occurrences déclenchant l'alerte.
+  \item \textbf{Regroupement~:} champ de corrélation (par IP, utilisateur,
+        machine).
+  \item \textbf{Gravité~:} critique / haute / moyenne / basse.
+\end{enumerate}
+
+\begin{lstlisting}[style=StyleCode, language=YAML,
+  caption={Règle Wazuh --- brute force SSH, mapping MITRE ATT\&CK},
+  label={lst:regle-ssh}]
+<rule id="100200" level="10" frequency="5" timeframe="60">
+  <if_matched_sid>5716</if_matched_sid>  <!-- echec auth SSH -->
+  <same_source_ip />
+  <description>Brute force SSH : 5 echecs en 60s meme IP</description>
+  <mitre>
+    <id>T1110.001</id>  <!-- Brute Force: Password Guessing -->
+  </mitre>
+  <group>authentication_failures,brute_force,pci_dss_10.2.4</group>
+</rule>
+\end{lstlisting}
+
+\subsection{Faux positifs et fatigue d'alerte}
+
+\begin{boxdef}
+\textbf{Faux positif (FP)~:} Alerte signalant une menace inexistante.
+Un taux de FP élevé ($>80\,\%$) génère une \termecle{fatigue d'alerte}
+(\textit{alert fatigue})~: les analystes finissent par ignorer les alertes,
+y compris les vraies.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{Faux négatif (FN)~:} Menace réelle non détectée. Conséquence~:
+compromission silencieuse et temps de séjour élevé. Plus dangereux que le FP
+mais moins visible.
+\end{boxdef}
+
+La gestion du compromis FP/FN est au cœur de l'ingénierie de détection~:
+abaisser un seuil réduit les FN mais augmente les FP. Chaque règle doit
+être calibrée sur la \textit{baseline} de l'environnement cible.
+
+\begin{boxsiem}
+\textbf{Alerte SIEM --- LiZbiZ-SIS, 12/04/2026 03:14 UTC}
+\begin{verbatim}
+RULE    : 100200 — Brute force SSH
+LEVEL   : 10 (HIGH)
+SOURCE  : 203.0.113.42  (RU, TOR exit — AlienVault OTX)
+TARGET  : srv-web-01.lizbiz.local (10.0.1.10)
+COUNT   : 7 echecs / 45s   users: root, admin, backup
+MITRE   : T1110.001 — Password Guessing
+ACTION  : Ticket INC-2026-0412-001 cree — escalade N2
+\end{verbatim}
+\end{boxsiem}
+
+% ==============================================================================
+\section{Métriques de performance}
+\label{sec:soc-kpi}
+% ==============================================================================
+
+\begin{boxdef}
+\textbf{MTTD (\textit{Mean Time To Detect})~:} Durée moyenne entre la survenance
+d'un incident et sa détection. Objectif niveau~4~: $<4$~heures incidents critiques.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{MTTR (\textit{Mean Time To Respond})~:} Durée moyenne entre la détection
+et les premières mesures de confinement. Objectif niveau~4~: $<4$~heures.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{FPR (\textit{False Positive Rate})~:} Proportion des alertes ne
+correspondant pas à un incident réel. Cible production~: $<30\,\%$.
+\end{boxdef}
+
+\begin{boxdef}
+\textbf{Couverture ATT\&CK~:} Proportion des techniques MITRE ATT\&CK pour
+lesquelles au moins une règle de détection est active dans le SIEM.
+Exprimée par tactique (14~tactiques).
+\end{boxdef}
+
+\begin{table}[H]
+\centering\small
+\caption{Grille de maturité SOC (SOC-CMM adapté)}
+\label{tab:soc-maturite}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{1.2cm}p{2.5cm}p{3.8cm}p{3.5cm}p{2.2cm}}
+\toprule
+\tableauHeader{Niv.} & \tableauHeader{Désignation} &
+\tableauHeader{Couverture} & \tableauHeader{Détection} &
+\tableauHeader{MTTD cible} \\
+\midrule
+\textbf{1} & Initial   & Aucun SIEM, logs ad hoc       & Réactive (plainte user) & $>7$~j \\
+\textbf{2} & Défini    & SIEM, règles par défaut        & Alertes non triées       & 2--7~j \\
+\textbf{3} & Géré      & Règles personnalisées, triage  & FPR~$<50\,\%$            & $<24$~h \\
+\textbf{4} & Optimisé  & Threat hunting, CTI intégrée  & FPR~$<30\,\%$            & $<4$~h \\
+\textbf{5} & Adaptatif & SOAR, ML, automatisation       & Prédictive               & $<1$~h \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ==============================================================================
+\section{Threat Hunting et SOAR}
+\label{sec:hunting-soar}
+% ==============================================================================
+
+\subsection{Threat Hunting}
+
+\begin{boxdef}
+\textbf{Threat Hunting~:} Processus proactif et itératif de recherche de signaux
+de compromission latents, conduit par un analyste N3 à partir d'hypothèses
+formulées via la CTI. Cherche ce que les règles SIEM ne voient pas encore.
+\end{boxdef}
+
+Cycle~: \textbf{Hypothèse} (CTI) $\to$ \textbf{Investigation} (requêtes SIEM/EDR)
+$\to$ \textbf{Découverte} $\to$ \textbf{Amélioration} (nouvelle règle de détection).
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Chasse aux PowerShell encodés --- requête KQL Kibana},
+  label={lst:threat-hunt}]
+# Hypothese : T1059.001 — PowerShell encode pour download de payload
+# Source    : Sysmon Event ID 1 (Process Create)
+
+event.code: "1"
+  AND process.name: "powershell.exe"
+  AND process.command_line: (*-EncodedCommand* OR *-enc* OR *-e* OR *-w hidden*)
+  AND NOT process.parent.name: ("taskhostw.exe" OR "svchost.exe" OR "wmiprvse.exe")
+
+# Connexions sortantes depuis PowerShell (Sysmon EID 3)
+event.code: "3"
+  AND process.name: "powershell.exe"
+  AND NOT destination.ip: ("10.0.0.0/8" OR "192.168.0.0/16")
+\end{lstlisting}
+
+\subsection{SOAR}
+
+\begin{boxdef}
+\textbf{SOAR (\textit{Security Orchestration, Automation and Response})~:}
+Plateforme automatisant les actions de réponse déclenchées par le SIEM~:
+isolement réseau d'une machine, blocage IP au firewall, création de ticket,
+notification. Exécute les playbooks sans intervention humaine pour les
+actions de bas niveau, réduisant le MTTR.
+\end{boxdef}
+
+Distinction fondamentale~: le SIEM \textbf{détecte}, le SOAR \textbf{agit}.
+Solutions open-source~: TheHive + Cortex, Shuffle. Commerciales~: Splunk SOAR,
+Palo Alto XSOAR.
+
+% ==============================================================================
+\section*{Résumé}
+% ==============================================================================
+
+\begin{boxresume}
+\begin{itemize}
+  \item \textit{Assume breach}~: l'objectif est de détecter et contenir,
+        pas seulement d'empêcher. Métrique clé~: le \textit{dwell time}.
+  \item SOC~: capacité organisationnelle N1/N2/N3~; quatre modèles
+        (interne, MSSP, hybride, vSOC)~; trois piliers (personnes,
+        processus, technologie).
+  \item SIEM~: pipeline en 6~étapes (collecte, parsing, normalisation,
+        enrichissement, corrélation, alerte).
+  \item Métriques~: MTTD, MTTR, FPR, couverture ATT\&CK.
+  \item Threat hunting~: détection proactive par hypothèses CTI.
+        SOAR~: automatisation de la réponse.
+  \item LiZbiZ-SIS~: niveau~1 initial, objectif niveau~3.
+\end{itemize}
+\end{boxresume}
+
+\begin{boxexo}
+\textbf{Ex.~1.1 — Diagnostic de maturité.}
+Appliquez la grille (tab.~\ref{tab:soc-maturite}) à LiZbiZ-SIS.
+Justifiez chaque niveau et proposez deux actions correctives prioritaires.
+
+\medskip\textbf{Ex.~1.2 — Sélection de sources.}
+LiZbiZ-SIS dispose de~: 1~firewall pfSense, 2~serveurs Windows
+(AD~+ ERP), 1~serveur Linux Apache, 1~MySQL, 30~postes Windows,
+1~proxy Squid. Priorisez les 5~sources à intégrer en premier au SIEM
+en justifiant par les menaces détectables.
+
+\medskip\textbf{Ex.~1.3 — Règle de corrélation.}
+Rédigez en syntaxe Wazuh ou Sigma une règle détectant un mouvement
+latéral via SMB (T1021.002)~: connexion SMB réussie depuis un poste
+utilisateur vers plus de 3~serveurs distincts en moins de 5~minutes.
+Spécifiez niveau de gravité et mapping MITRE.
+\end{boxexo}
