@@ -1,0 +1,336 @@
+% ==============================================================================
+% lab3_incident_simulation.tex — UE SIS589
+% Travaux Pratiques 3 : Simulation Tabletop — Ransomware LiZbiZ-SIS
+% ==============================================================================
+
+\chapter{TP~3~— Simulation Tabletop~: Ransomware sur LiZbiZ-SIS}
+\label{lab:tabletop}
+
+\epigraph{\itshape « On ne s'improvise pas gestionnaire d'incident.
+  On s'y prépare. »}
+         {--- NIST SP~800-61}
+
+% ── Présentation ──────────────────────────────────────────────────────────────
+\section*{Présentation du TP}
+
+\begin{table}[H]
+\centering\small
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3.5cm}p{10cm}}
+\toprule
+\textbf{Durée} & 4~heures (2~h simulation + 2~h rédaction) \\
+\textbf{Format} & Exercice Tabletop en équipes de 4~à~5 étudiants \\
+\textbf{Objectifs} & Piloter une réponse à incident ransomware en temps
+  contraint~; appliquer le cycle ISO~27035~; rédiger un rapport exécutif
+  et un plan de remédiation~; conduire le RETEX \\
+\textbf{Pré-requis} & Chapitres~8, 9 et~10~; Lab~1 et Lab~2 complétés \\
+\textbf{Rôles} & Chaque équipe désigne~: 1~Incident Manager,
+  1~Analyste Technique, 1~Responsable Communication,
+  1~Coordinateur Légal, 1~Secrétaire (log d'incident) \\
+\textbf{Livrable} & Rapport d'incident (15~pages)~; présentation
+  orale de 10~minutes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% ==============================================================================
+\section{Scénario initial~: l'alerte de 07h13}
+\label{lab3:scenario-initial}
+% ==============================================================================
+
+\begin{boxalert}
+\textbf{Contexte~— Lundi 15~mai~2026, 07h13~UTC}
+
+L'analyste N1 de permanence reçoit simultanément~:
+
+\begin{itemize}
+  \item Une alerte SIEM critique~: \texttt{RULE 100201 — Ransomware
+        Indicator — Mass file rename (.enc extension)} depuis
+        srv-erp-01 (10.0.2.10, Windows Server~2022).
+  \item Un appel téléphonique du responsable comptabilité~:
+        \og{}Tous mes fichiers ont une extension bizarre (.enc),
+        je ne peux plus les ouvrir, et il y a un fichier
+        READ\_ME\_DECRYPT.txt sur mon bureau.\fg{}
+  \item Un email automatique du système de sauvegarde~:
+        \og{}Erreur~: impossible d'accéder au dossier
+        \texttt{\textbackslash\textbackslash srv-backup-01\textbackslash backups}.
+        Accès refusé.\fg{}
+\end{itemize}
+
+\textbf{Informations disponibles à T+0~:}
+\begin{itemize}
+  \item Il est 07h13. La DSI ouvre à 08h00. Le RSSI est en déplacement
+        à Douala. Le DG n'est pas encore arrivé.
+  \item Le SIEM affiche 847~alertes en 12~minutes sur srv-erp-01.
+  \item L'IP 185.220.101.5 (sortante) apparaît dans les logs
+        firewall depuis 03h47.
+  \item Aucun playbook ransomware n'existe.
+  \item Les sauvegardes de la semaine précédente se trouvent sur
+        srv-backup-01 (Windows Server~2019), sur le même VLAN~20.
+\end{itemize}
+\end{boxalert}
+
+
+% ==============================================================================
+\section{Phase~1 (T+0 à T+30~min)~: Détection et triage}
+\label{lab3:phase1}
+% ==============================================================================
+
+\textbf{Durée allouée~: 30~minutes de simulation.}
+
+\begin{boxexo}
+\textbf{Travail Phase~1 — Questions à traiter en équipe~:}
+
+\begin{enumerate}
+  \item \textbf{Qualification (Incident Manager + Analyste)~:}
+        Classifiez cet incident selon la grille du chapitre~8
+        (tableau~\ref{tab:gravite-incidents}). Justifiez en 3~phrases.
+        Qui activez-vous en premier~?
+
+  \item \textbf{Premières décisions (Incident Manager)~:}
+        Listez les 5~premières actions à mener dans les 30~minutes,
+        dans l'ordre de priorité. Pour chacune~: qui la mène~?
+        durée estimée~? risque si non faite~?
+
+  \item \textbf{Isolation (Analyste Technique)~:}
+        Sur quels systèmes agissez-vous en premier~? Décrivez
+        techniquement comment vous isolez srv-erp-01 du réseau
+        sans l'éteindre. Pourquoi ne pas l'éteindre immédiatement~?
+
+  \item \textbf{Communication immédiate (Responsable Communication)~:}
+        Rédigez le message de 3~phrases envoyé à TOUS les employés
+        de LiZbiZ-SIS dans les 10~premières minutes. Objectif~:
+        prévenir la propagation sans créer de panique.
+
+  \item \textbf{Aspect légal (Coordinateur Légal)~:}
+        La base de données clients (50~000 dossiers incluant noms,
+        emails, historiques de commandes et transactions mobile money)
+        est sur srv-erp-01. Quelles obligations légales s'appliquent~?
+        Quel délai~? Quel destinataire~?
+\end{enumerate}
+\end{boxexo}
+
+\begin{boxlizbiz}
+\textbf{Inject~1 — T+15~min}
+
+L'analyste découvre dans les logs firewall~:
+\begin{itemize}
+  \item Connexions SMB en masse depuis srv-erp-01 vers srv-backup-01
+    entre 03h47 et 04h22 (volume~: 2,3~Go transféré).
+  \item Connexion RDP réussie depuis 196.207.12.88 vers srv-erp-01
+    le 14~mai à 22h41 (la veille), user~: \texttt{administrator}.
+  \item Connexion sortante HTTPS vers 185.220.101.5~:443 établie
+    depuis srv-erp-01, durée~: 7h34~min.
+\end{itemize}
+\end{boxlizbiz}
+
+\begin{boxexo}
+\textbf{Questions Post-Inject~1~:}
+
+\begin{enumerate}
+  \item Révisez votre évaluation initiale. L'incident est-il plus
+        grave que prévu~? Pourquoi~?
+  \item La connexion RDP du 14~mai à 22h41 change-t-elle votre
+        analyse~? Quel est le vecteur d'accès initial probable~?
+        Quel TTP MITRE~?
+  \item Srv-backup-01 est-il compromis~? Sur quelle base~?
+        Quelle décision prenez-vous concernant les sauvegardes~?
+\end{enumerate}
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Phase~2 (T+30 à T+2h)~: Investigation et confinement}
+\label{lab3:phase2}
+% ==============================================================================
+
+\textbf{Durée allouée~: 45~minutes de simulation.}
+
+\begin{boxlizbiz}
+\textbf{Inject~2 — T+35~min}
+
+L'analyste a pu se connecter localement à srv-erp-01 (pas SSH, pas RDP —
+connexion console directe). Il observe~:
+\begin{itemize}
+  \item Le processus \texttt{svchosts.exe} (noter le 's' final) tourne
+    dans \texttt{C:\textbackslash ProgramData\textbackslash Microsoft\textbackslash
+    svchost\textbackslash}.
+  \item Une tâche planifiée nommée \texttt{WindowsUpdater} exécute
+    \texttt{C:\textbackslash ProgramData\textbackslash upd.vbs} toutes les
+    5~minutes.
+  \item Le volume des données chiffrées~: 47~Go sur les partages réseau
+    cartographiés (\texttt{Z:\textbackslash} = srv-backup-01).
+  \item Le fichier \texttt{READ\_ME\_DECRYPT.txt}~:
+    \og{}\textit{Your files are encrypted with AES-256. Send 5~BTC to
+    [adresse] within 72h or data will be published online.}\fg{}
+  \item Connexion active (C2) toujours établie vers 185.220.101.5.
+\end{itemize}
+\end{boxlizbiz}
+
+\begin{boxexo}
+\textbf{Travail Phase~2~:}
+
+\begin{enumerate}
+  \item \textbf{Confinement (Analyste Technique)~:}
+    Listez les 6~actions techniques de confinement dans l'ordre.
+    Pour chacune~: commande exacte (PowerShell / CLI switch) ou
+    procédure~; effet attendu~; risque résiduel.
+
+  \item \textbf{Mapping ATT\&CK (Analyste Technique)~:}
+    À partir de tous les faits disponibles, complétez le tableau
+    de mapping MITRE ATT\&CK (minimum 8~entrées)~:
+    Timestamp / Événement / Tactique / Technique / TTP ID.
+
+  \item \textbf{Preuves forensiques (Analyste Technique)~:}
+    Avant d'éteindre ou de remettre en état, listez les 5~pièces
+    à collecter sur srv-erp-01, dans l'ordre de volatilité,
+    avec l'outil d'acquisition et le format de stockage.
+
+  \item \textbf{Communication de crise (Responsable Communication)~:}
+    Rédigez un email de crise à destination du DG de LiZbiZ-SIS~:
+    2~paragraphes, non technique, incluant~: nature de l'incident,
+    impact actuel, mesures prises, prochaines étapes,
+    décision requise (payer ou ne pas payer).
+
+  \item \textbf{Recommandation de paiement (Incident Manager)~:}
+    Faut-il payer la rançon~? Argumentez en 5~points (technique,
+    légal, éthique, financier, précédent). Quelle est votre
+    recommandation finale~?
+\end{enumerate}
+\end{boxexo}
+
+\begin{boxlizbiz}
+\textbf{Inject~3 — T+1h15~min}
+
+\begin{itemize}
+  \item Les sauvegardes de srv-backup-01 ont également été chiffrées~:
+    le ransomware a accédé au partage SMB et chiffré les fichiers
+    \texttt{.bak} et \texttt{.sql} en priorité.
+  \item Bonne nouvelle~: une copie tape hors-site (LTO-7) du dimanche
+    13~mai à 23h00 existe dans le local d'archivage (non connecté
+    au réseau).
+  \item Le partenaire mobile money (MTN MoMo) contacte LiZbiZ par
+    email~: il a détecté des transactions suspectes depuis le
+    compte API de LiZbiZ entre 04h15 et 04h50.
+\end{itemize}
+\end{boxlizbiz}
+
+\begin{boxexo}
+\textbf{Questions Post-Inject~3~:}
+\begin{enumerate}
+  \item La sauvegarde tape hors-site est-elle utilisable pour la
+    restauration~? Quels risques~? Quelle procédure de validation~?
+  \item Les transactions MTN MoMo suspectes modifient-elles les
+    obligations légales~? Notifier qui~? Dans quel délai~?
+  \item Révisez votre recommandation sur le paiement de la rançon.
+\end{enumerate}
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Phase~3 (T+2h à T+4h)~: Éradication et rétablissement}
+\label{lab3:phase3}
+% ==============================================================================
+
+\textbf{Durée allouée~: 30~minutes de simulation.}
+
+\begin{boxexo}
+\textbf{Travail Phase~3~:}
+
+\begin{enumerate}
+  \item \textbf{Plan d'éradication~:}
+    Rédigez le plan d'éradication en 7~étapes ordonnées. Chaque étape~:
+    action, responsable, outil, critère de validation, durée estimée.
+
+  \item \textbf{Plan de restauration~:}
+    Définissez l'ordre de restauration des systèmes~:
+    (a)~quel système restaurer en premier~? Pourquoi~?
+    (b)~comment valider l'intégrité de la bande avant restauration~?
+    (c)~quelle surveillance renforcer pendant les 30~premiers jours~?
+
+  \item \textbf{Critères de retour à la normale~:}
+    Listez 5~critères mesurables qui permettront de déclarer
+    la fin de l'incident et le retour à la normale.
+\end{enumerate}
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Phase~4 — RETEX de l'équipe}
+\label{lab3:retex}
+% ==============================================================================
+
+À l'issue de la simulation, chaque équipe conduit son propre RETEX~:
+
+\begin{boxexo}
+\textbf{RETEX Tabletop — Questions réflexives~:}
+
+\begin{enumerate}
+  \item \textbf{Ce qui a bien fonctionné~:}
+    Identifiez 3~décisions ou actions que votre équipe a bien gérées.
+    Pourquoi~? Quel principe ou outil a été déterminant~?
+
+  \item \textbf{Ce qui aurait pu mieux se passer~:}
+    Identifiez 3~décisions retardées ou erronées. Quelle information
+    manquait~? Quelle procédure aurait dû exister~?
+
+  \item \textbf{Rôles et communication~:}
+    La répartition des rôles était-elle adaptée~? L'Incident Manager
+    a-t-il eu trop/pas assez d'informations~? La communication interne
+    a-t-elle été fluide~?
+
+  \item \textbf{Ce que LiZbiZ-SIS doit créer avant le prochain incident~:}
+    Listez les 5~artefacts documentaires (playbooks, politiques,
+    contacts, procédures) dont l'absence vous a pénalisés.
+
+  \item \textbf{Autoévaluation~:}
+    Sur une échelle de 1 à~5, évaluez la performance de votre équipe
+    sur~: (a)~rapidité de détection~; (b)~qualité du confinement~;
+    (c)~communication~; (d)~application des normes~;
+    (e)~plan de remédiation. Justifiez chaque note.
+\end{enumerate}
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Livrable et critères d'évaluation}
+\label{lab3:livrable}
+% ==============================================================================
+
+\textbf{Rapport d'incident (15~pages) + Présentation orale (10~min).}
+
+Structure du rapport~:
+\begin{enumerate}
+  \item Résumé exécutif à destination du DG (1~page).
+  \item Chronologie de l'incident (tableau annoté MITRE).
+  \item Analyse de l'attaque (vecteur, propagation, impact).
+  \item Preuves collectées (liste avec hashes et méthode).
+  \item Décisions clés et leur justification.
+  \item Plan d'éradication et de restauration.
+  \item Plan de remédiation priorisé (6~actions minimum, tableau
+        impact / effort / délai / responsable / KPI).
+  \item RETEX (causes profondes, 5~Pourquoi, leçons).
+\end{enumerate}
+
+\begin{table}[H]
+\centering\small
+\caption{Barème Lab~3}
+\label{tab:lab3-bareme}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{6cm}p{6.5cm}p{2cm}}
+\toprule
+\tableauHeader{Critère} & \tableauHeader{Indicateurs} &
+\tableauHeader{Points} \\
+\midrule
+Qualification et premières décisions & Gravité justifiée, actions prioritaires correctes & 1.5 \\
+Confinement technique & Actions techniques correctes et ordonnées & 1.5 \\
+Mapping MITRE ATT\&CK & $\geq 8$~entrées, TTPs corrects & 1.5 \\
+Communication (DG + employés) & Ton adapté, contenu juste, non technique & 1 \\
+Traitement légal & Obligations correctes, délais et destinataires & 1 \\
+RETEX et plan de remédiation & Causes profondes, 5~Pourquoi, $\geq 6$~actions & 2 \\
+Présentation orale & Clarté, maîtrise du sujet, gestion du temps & 1.5 \\
+\bottomrule
+\multicolumn{2}{r}{\textbf{Total}} & \textbf{10} \\
+\end{tabular}
+\end{table}

@@ -1,0 +1,443 @@
+% ==============================================================================
+% lab2_forensics_disque.tex — UE SIS589
+% Travaux Pratiques 2 : Acquisition forensique, Autopsy, Timeline, Rapport
+% ==============================================================================
+
+\chapter{TP~2~— Acquisition Forensique, Analyse de Disque et Rapport}
+\label{lab:forensics}
+
+\epigraph{\itshape « Chaque fichier raconte une histoire.
+  L'investigateur lit entre les secteurs. »}
+         {--- SANS FOR500}
+
+% ── Présentation ──────────────────────────────────────────────────────────────
+\section*{Présentation du TP}
+
+\begin{table}[H]
+\centering\small
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3.5cm}p{10cm}}
+\toprule
+\textbf{Durée} & 6~heures (2~h acquisition + 4~h analyse + rédaction) \\
+\textbf{Objectifs} & Acquérir une image disque bit à bit~; maintenir la
+  chaîne de custody~; analyser les artefacts Windows avec Autopsy et EZTools~;
+  analyser un dump mémoire avec Volatility~3~; construire une timeline
+  forensique et rédiger un rapport d'investigation \\
+\textbf{Pré-requis} & Chapitres~5, 6 et~7~; connaissance de base de Linux \\
+\textbf{Infrastructure} & Station SIFT Workstation fournie (VM)~;
+  image disque \texttt{srv-web-01.dd} et dump mémoire
+  \texttt{srv-web-01.lime} disponibles sur le partage TP~;
+  bloqueur en écriture USB disponible en salle \\
+\textbf{Livrable} & Rapport d'investigation forensique complet
+  (20~pages max, format académique) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Contexte du cas.}
+Le 12~avril~2026 à 03h14~UTC, le SIEM de LiZbiZ-SIS a détecté une
+intrusion sur \texttt{srv-web-01} (Ubuntu~22.04, serveur Apache~2.4,
+IP~: 10.0.1.10). L'alerte initiale signalait un brute force SSH réussi
+depuis 203.0.113.42. Vous avez été mandaté pour conduire l'investigation
+forensique de ce serveur~; les images vous ont été remises à 05h30~UTC
+avec le PV de collecte de l'analyste de permanence.
+
+
+% ==============================================================================
+\section{Partie~A — Vérification des pièces et prise en charge}
+\label{lab2:partieA}
+% ==============================================================================
+
+\subsection{A1 — Vérification d'intégrité des images}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Vérification d'intégrité avant toute analyse},
+  label={lst:lab2-hash-verify}]
+# ─── Sur la SIFT Workstation — Commencer TOUJOURS par cette étape ────────────
+# Copier les images sur la station d'analyse (NE PAS ANALYSER sur le partage)
+mkdir -p ~/cases/INC-2026-0412-001/evidence/
+cp /mnt/tp-share/srv-web-01.dd       ~/cases/INC-2026-0412-001/evidence/
+cp /mnt/tp-share/srv-web-01.lime     ~/cases/INC-2026-0412-001/evidence/
+cp /mnt/tp-share/pv_collecte.txt     ~/cases/INC-2026-0412-001/evidence/
+
+# Vérifier les hashes contre ceux du PV de collecte
+sha256sum ~/cases/INC-2026-0412-001/evidence/srv-web-01.dd
+sha256sum ~/cases/INC-2026-0412-001/evidence/srv-web-01.lime
+
+# Comparer manuellement avec le PV de collecte
+# Les deux valeurs DOIVENT être identiques
+
+# Si mismatch : ARRÊT IMMÉDIAT — contacter l'enseignant
+# et documenter la divergence dans votre rapport
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Question A1.1~:} Lisez le fichier \texttt{pv\_collecte.txt}.
+Identifiez les 5~éléments obligatoires d'un PV de collecte conforme
+à ISO~27037. Sont-ils tous présents~? Signaler toute lacune.
+
+\medskip\textbf{Question A1.2~:} Les hashes SHA-256 calculés
+correspondent-ils aux valeurs du PV~? Documentez le résultat dans
+votre rapport (captures d'écran des deux commandes).
+\end{boxexo}
+
+\subsection{A2 — Montage de l'image en lecture seule}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Montage de l'image disque en lecture seule sur SIFT},
+  label={lst:lab2-montage}]
+# ─── Identifier les partitions dans l'image ───────────────────────────────────
+cd ~/cases/INC-2026-0412-001/evidence/
+mmls srv-web-01.dd
+# Résultat attendu :
+# 000: Meta    0000000000 0000000001 0000000001 Primary Table (#0)
+# 001: -----   0000000000 0000002047 0000002048 Unallocated
+# 002: 0x83    0000002048 0002099199 0002097152 Linux (ext4) <-- PARTITION
+# 003: 0x8E    0002099200 0004194303 0002095104 Linux LVM
+
+# Monter la partition principale en lecture seule
+# offset = secteur début × 512 = 2048 × 512 = 1048576
+sudo mkdir -p /mnt/forensics/srv-web-01/
+sudo mount -o ro,loop,offset=1048576 \
+  ~/cases/INC-2026-0412-001/evidence/srv-web-01.dd \
+  /mnt/forensics/srv-web-01/
+
+# Vérifier le montage
+ls /mnt/forensics/srv-web-01/
+mount | grep forensics  # Confirmer "ro" (read-only)
+
+# Vérifier que le hash du disque n'a pas changé
+sha256sum ~/cases/INC-2026-0412-001/evidence/srv-web-01.dd
+# Doit être IDENTIQUE à la valeur initiale
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Question A2.1~:} Pourquoi utilise-t-on l'option \texttt{ro}
+(read-only) au montage~? Quels risques encourrait-on en montant
+l'image en lecture-écriture~?
+
+\medskip\textbf{Question A2.2~:} La commande \texttt{mmls} révèle
+la structure de la table de partitions. À quoi correspond la zone
+\texttt{Unallocated} entre le secteur~0 et~2047~?
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Partie~B — Analyse des artefacts Linux}
+\label{lab2:partieB}
+% ==============================================================================
+
+\subsection{B1 — Analyse des journaux d'authentification}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse d'auth.log sur l'image montée},
+  label={lst:lab2-authlog}]
+# ─── Journaux d'authentification ─────────────────────────────────────────────
+# Tous les événements SSH de la nuit du 12 avril
+grep "Apr 12" /mnt/forensics/srv-web-01/var/log/auth.log | \
+  grep -E "(Failed|Accepted|Invalid)" | \
+  awk '{print $1,$2,$3,$9,$11}' | sort
+
+# Top IP sources d'échecs SSH
+grep "Failed password" /mnt/forensics/srv-web-01/var/log/auth.log | \
+  awk '{print $(NF-3)}' | sort | uniq -c | sort -rn | head -10
+
+# Identifier la première authentification réussie
+grep "Accepted" /mnt/forensics/srv-web-01/var/log/auth.log | head -5
+
+# ─── Historique des connexions (wtmp) ─────────────────────────────────────────
+last -f /mnt/forensics/srv-web-01/var/log/wtmp | head -20
+
+# ─── Historique bash de chaque utilisateur ────────────────────────────────────
+for user in $(ls /mnt/forensics/srv-web-01/home/); do
+  histfile="/mnt/forensics/srv-web-01/home/$user/.bash_history"
+  if [ -f "$histfile" ]; then
+    echo "=== $user ==="
+    cat "$histfile"
+  fi
+done
+cat /mnt/forensics/srv-web-01/root/.bash_history 2>/dev/null
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Travail~B1~:} Remplissez un tableau chronologique des
+événements SSH~: timestamp, IP source, utilisateur, résultat
+(succès/échec). Répondez~:
+(a)~Combien d'échecs avant le premier succès~?
+(b)~À quelle heure exacte le succès a-t-il eu lieu~?
+(c)~Quel compte a été compromis~?
+(d)~Quelles commandes suspectes apparaissent dans les historiques bash~?
+\end{boxexo}
+
+\subsection{B2 — Recherche de fichiers suspects et persistances}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Recherche de fichiers malveillants et persistances},
+  label={lst:lab2-suspects}]
+# ─── Fichiers créés/modifiés entre 03h00 et 05h00 le 12/04/2026 ──────────────
+find /mnt/forensics/srv-web-01/ \
+  -newer /mnt/forensics/srv-web-01/etc/passwd \
+  -not -newer /mnt/forensics/srv-web-01/etc/shadow \
+  -type f 2>/dev/null | \
+  grep -v "/proc\|/sys\|/run" | sort
+
+# Alternative avec touch et timestamps
+# Créer des fichiers repères avec les timestamps de la fenêtre d'incident
+# puis utiliser find -newer
+
+# ─── Fichiers dans les répertoires temporaires ────────────────────────────────
+find /mnt/forensics/srv-web-01/tmp \
+     /mnt/forensics/srv-web-01/var/tmp \
+     /mnt/forensics/srv-web-01/dev/shm \
+  -type f -ls 2>/dev/null
+
+# ─── Webshells potentiels dans le DocumentRoot Apache ─────────────────────────
+find /mnt/forensics/srv-web-01/var/www/ -name "*.php" -ls 2>/dev/null
+grep -rl "eval\|base64_decode\|system\|exec\|passthru\|shell_exec" \
+  /mnt/forensics/srv-web-01/var/www/ 2>/dev/null
+
+# ─── Mécanismes de persistance ────────────────────────────────────────────────
+# Crontabs
+for user in root $(ls /mnt/forensics/srv-web-01/home/); do
+  cfile="/mnt/forensics/srv-web-01/var/spool/cron/crontabs/$user"
+  [ -f "$cfile" ] && echo "=== Cron $user ===" && cat "$cfile"
+done
+
+# Authorized_keys (backdoors SSH)
+find /mnt/forensics/srv-web-01/ -name "authorized_keys" 2>/dev/null | \
+  xargs -I{} sh -c 'echo "=== {} ==="; cat {}'
+
+# Services systemd non standards
+find /mnt/forensics/srv-web-01/etc/systemd/system/ \
+  -name "*.service" 2>/dev/null | sort
+
+# LD_PRELOAD (rootkit)
+cat /mnt/forensics/srv-web-01/etc/ld.so.preload 2>/dev/null
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Travail~B2~:} Documentez chaque artefact suspect trouvé~:
+chemin complet, timestamps MACE (stat), contenu (si lisible),
+TTP MITRE correspondant. Utilisez un tableau à 4~colonnes
+(chemin, timestamps, contenu, TTP).
+\end{boxexo}
+
+\subsection{B3 — Récupération de fichiers supprimés}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Carving et récupération de fichiers supprimés},
+  label={lst:lab2-carving}]
+# ─── The Sleuth Kit : fichiers supprimés ──────────────────────────────────────
+mkdir -p ~/cases/INC-2026-0412-001/recovered/
+cd ~/cases/INC-2026-0412-001/
+
+# Lister les entrées de répertoire supprimées
+fls -r -d ~/cases/INC-2026-0412-001/evidence/srv-web-01.dd | \
+  head -50 > recovered/deleted_files_list.txt
+cat recovered/deleted_files_list.txt
+
+# Récupérer un fichier spécifique par inode
+# (remplacer INODE par le numéro trouvé dans la liste)
+# icat evidence/srv-web-01.dd INODE > recovered/fichier_recupere.bin
+# sha256sum recovered/fichier_recupere.bin
+
+# ─── Scalpel : carving de l'espace non alloué ────────────────────────────────
+mkdir -p recovered/scalpel_output/
+scalpel -c /etc/scalpel/scalpel.conf \
+        -o recovered/scalpel_output/ \
+        evidence/srv-web-01.dd
+# Types recherchés : scripts shell, archives, PDF, scripts Python
+
+# ─── bulk_extractor : extraction de patterns ─────────────────────────────────
+mkdir -p recovered/bulk_output/
+bulk_extractor -R \
+  -o recovered/bulk_output/ \
+  -e net -e email -e url \
+  evidence/srv-web-01.dd
+# Analyser : url.txt, email.txt, domain.txt
+head -30 recovered/bulk_output/url.txt | grep -v "microsoft\|ubuntu\|debian"
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Travail~B3~:} Identifiez au moins~2~fichiers supprimés
+pertinents pour l'investigation. Pour chacun~:
+(a)~numéro d'inode~;
+(b)~contenu récupéré (si lisible)~;
+(c)~hash SHA-256 de la version récupérée~;
+(d)~interprétation forensique (à quoi servait ce fichier~?).
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Partie~C — Analyse du dump mémoire}
+\label{lab2:partieC}
+% ==============================================================================
+
+\subsection{C1 — Analyse avec Volatility~3}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Analyse du dump mémoire srv-web-01 avec Volatility~3},
+  label={lst:lab2-volatility}]
+# Toutes les commandes depuis ~/cases/INC-2026-0412-001/
+DUMP="evidence/srv-web-01.lime"
+V3="python3 /opt/volatility3/vol.py"
+
+# ─── Étape 1 : Identification du système ──────────────────────────────────────
+$V3 -f $DUMP linux.info
+
+# ─── Étape 2 : Liste des processus ────────────────────────────────────────────
+$V3 -f $DUMP linux.pslist   > analysis/pslist.txt
+$V3 -f $DUMP linux.pstree   > analysis/pstree.txt
+cat analysis/pstree.txt | head -40
+
+# ─── Étape 3 : Connexions réseau actives au moment du dump ────────────────────
+$V3 -f $DUMP linux.netstat  > analysis/netstat.txt
+cat analysis/netstat.txt
+
+# ─── Étape 4 : Recherche de processus suspects ───────────────────────────────
+# Processus démarrés depuis /tmp, /dev/shm ou des chemins inhabituels
+grep -E "(/tmp/|/dev/shm/|/var/tmp/)" analysis/pslist.txt
+
+# Processus sans chemin connu (fileless)
+grep -E "^[0-9].*\s-\s*$" analysis/pslist.txt
+
+# ─── Étape 5 : Modules et bibliothèques chargés ───────────────────────────────
+$V3 -f $DUMP linux.lsmod > analysis/lsmod.txt
+# Comparer avec la liste des modules attendus sur Ubuntu 22.04
+
+# ─── Étape 6 : Historique bash en mémoire ────────────────────────────────────
+$V3 -f $DUMP linux.bash > analysis/bash_history_mem.txt
+cat analysis/bash_history_mem.txt
+
+# ─── Étape 7 : Recherche de clés et chaînes suspectes ────────────────────────
+$V3 -f $DUMP linux.yarascan \
+  --yara-rules '/tmp/rules.yar' > analysis/yara_matches.txt
+# Règle YARA minimale (fichier /tmp/rules.yar) :
+# rule SuspiciousStrings {
+#   strings:
+#     $a = "wget " nocase
+#     $b = "base64 -d" nocase
+#     $c = "curl " nocase
+#     $d = "nc -e" nocase
+#   condition: any of them
+# }
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Travail~C1~:}
+\begin{enumerate}
+  \item Listez tous les processus actifs au moment du dump.
+        Identifiez les 3~processus les plus suspects et justifiez.
+  \item Les connexions réseau révèlent-elles une connexion C2 active~?
+        Si oui~: IP, port, processus.
+  \item La commande \texttt{linux.bash} révèle-t-elle des commandes
+        supplémentaires par rapport à l'historique sur disque~?
+        Pourquoi est-ce forensiquement important~?
+  \item Qu'est-ce que le \textit{module LiME} et pourquoi son
+        chargement sur une machine suspecte serait un indicateur
+        de compromission~?
+\end{enumerate}
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Partie~D — Construction de la timeline}
+\label{lab2:partieD}
+% ==============================================================================
+
+\subsection{D1 — Timeline multi-sources}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Construction de la timeline forensique complète},
+  label={lst:lab2-timeline}]
+# ─── The Sleuth Kit : bodyfile depuis l'image ─────────────────────────────────
+fls -r -m "/" \
+  ~/cases/INC-2026-0412-001/evidence/srv-web-01.dd > \
+  ~/cases/INC-2026-0412-001/analysis/bodyfile.txt
+
+# Générer la timeline NTFS (ici ext4) pour le 12/04/2026
+mactime -b ~/cases/INC-2026-0412-001/analysis/bodyfile.txt \
+        -d 2026-04-12 \
+        -z UTC > \
+        ~/cases/INC-2026-0412-001/analysis/timeline_20260412.csv
+
+# Filtrer sur la fenêtre d'incident (02h00 à 06h00)
+grep "^2026-04-12 0[2345]:" \
+  ~/cases/INC-2026-0412-001/analysis/timeline_20260412.csv | \
+  sort > ~/cases/INC-2026-0412-001/analysis/timeline_incident.csv
+
+wc -l ~/cases/INC-2026-0412-001/analysis/timeline_incident.csv
+
+# ─── Croiser avec les logs auth.log ───────────────────────────────────────────
+grep "Apr 12 0[2345]" \
+  /mnt/forensics/srv-web-01/var/log/auth.log | \
+  awk '{printf "2026-04-12 %s:%s:%s | auth.log | %s\n", $3, $4, $5, $0}' >> \
+  ~/cases/INC-2026-0412-001/analysis/timeline_incident.csv
+
+# Trier la timeline finale
+sort ~/cases/INC-2026-0412-001/analysis/timeline_incident.csv > \
+  ~/cases/INC-2026-0412-001/analysis/timeline_FINAL.csv
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Travail~D1~:} Construisez une timeline forensique au format
+tableau (8 colonnes minimum)~: timestamp UTC, source (auth.log,
+filesystem, mémoire), entité (processus/fichier/utilisateur),
+type d'événement, chemin/valeur, IP associée, TTP MITRE,
+niveau de confiance (Confirmé/Probable/Suspect).
+
+La timeline doit contenir au minimum 10~entrées sur la plage 02h00--06h00.
+Annotez chaque entrée avec le TTP MITRE correspondant.
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Partie~E — Rapport d'investigation forensique}
+\label{lab2:partieE}
+% ==============================================================================
+
+\textbf{Rédigez un rapport d'investigation forensique complet}
+en respectant la structure ci-dessous (20~pages maximum, Times New Roman
+12, interligne 1,5)~:
+
+\begin{enumerate}
+  \item \textbf{Page de garde} (mandat, pièces saisies, investigateur,
+        dates).
+  \item \textbf{Résumé exécutif} (1~page, non technique, accessible
+        au directeur).
+  \item \textbf{Déclaration d'intégrité} (hashes vérifiés,
+        méthodes utilisées, conformité ISO~27037).
+  \item \textbf{Environnement d'analyse} (OS, outils, versions).
+  \item \textbf{Chronologie de l'incident} (timeline annotée).
+  \item \textbf{Artefacts découverts} (tableau complet avec hashes).
+  \item \textbf{Analyse et interprétation} (reconstruction de l'attaque,
+        TTPs MITRE, vecteur initial, propagation).
+  \item \textbf{Réponses aux questions posées}~:
+        (a)~Comment l'attaquant a-t-il accédé au serveur~?
+        (b)~Quelles actions a-t-il menées~?
+        (c)~Des données ont-elles été exfiltrées~?
+        (d)~Des persistances ont-elles été installées~?
+  \item \textbf{Recommandations} (5~mesures correctives priorisées).
+  \item \textbf{Annexes} (copies de commandes, captures d'écran, logs).
+\end{enumerate}
+
+\begin{table}[H]
+\centering\small
+\caption{Barème Lab~2}
+\label{tab:lab2-bareme}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{6cm}p{7cm}p{2cm}}
+\toprule
+\tableauHeader{Critère} & \tableauHeader{Indicateurs} &
+\tableauHeader{Points} \\
+\midrule
+Intégrité vérifiée et documentée & Hashes corrects, PV analysé & 1 \\
+Montage correct et traces documentées & ro confirmé, commandes loguées & 1 \\
+Artefacts identifiés (disque) & $\geq 5$ artefacts pertinents & 2 \\
+Analyse mémoire & $\geq 3$ observations Volatility pertinentes & 2 \\
+Timeline complète et annotée MITRE & $\geq 10$ entrées, TTPs corrects & 2 \\
+Qualité du rapport & Structure, langage, conclusion & 2 \\
+\bottomrule
+\multicolumn{2}{r}{\textbf{Total}} & \textbf{10} \\
+\end{tabular}
+\end{table}

@@ -1,0 +1,429 @@
+% ==============================================================================
+% lab1_siem_detection.tex — UE SIS589
+% Travaux Pratiques 1 : Déploiement SIEM, Corrélation et Chasse aux Alertes
+% ==============================================================================
+
+\chapter{TP~1~— Déploiement SIEM, Corrélation et Chasse aux Alertes}
+\label{lab:siem}
+
+\epigraph{\itshape « Un SIEM sans règles calibrées est un radar sans opérateur. »}
+         {--- Principe SOC}
+
+% ── Présentation ──────────────────────────────────────────────────────────────
+\section*{Présentation du TP}
+
+\begin{table}[H]
+\centering\small
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{3.5cm}p{10cm}}
+\toprule
+\textbf{Durée} & 4~heures (2~h déploiement + 2~h analyse) \\
+\textbf{Objectifs} & Déployer Wazuh + ELK~; configurer les agents~; créer
+  des règles de corrélation~; qualifier des alertes réelles~; produire
+  un rapport d'alerte structuré \\
+\textbf{Pré-requis} & Administration Linux niveau opérationnel~;
+  notions de réseau TCP/IP~; chapitres~1--3 lus \\
+\textbf{Infrastructure} & Environnement GNS3/EVE-NG fourni par l'enseignant.
+  Accès SSH à srv-siem-01 (Wazuh Manager)~; agents pré-installés sur
+  srv-web-01, srv-erp-01, dc-01 \\
+\textbf{Livrable} & Rapport de TP~: captures d'écran des tableaux de bord,
+  règles rédigées, 3~alertes qualifiées, recommandations \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% ==============================================================================
+\section{Partie~A — Vérification et prise en main de l'infrastructure SIEM}
+\label{lab1:partieA}
+% ==============================================================================
+
+\subsection{A1 — Connexion et état de l'architecture}
+
+Connectez-vous au serveur SIEM de LiZbiZ-SIS~:
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Connexion initiale au SIEM et vérification des services},
+  label={lst:lab1-connexion}]
+# Connexion SSH au serveur Wazuh Manager
+ssh etudiant@10.0.0.5  # Mot de passe fourni en séance
+
+# ─── Vérifier que tous les services sont actifs ───────────────────────────────
+sudo systemctl status wazuh-manager
+sudo systemctl status elasticsearch
+sudo systemctl status kibana
+sudo systemctl status logstash
+
+# ─── Lister les agents Wazuh connectés ───────────────────────────────────────
+sudo /var/ossec/bin/agent_control -l
+# Résultat attendu :
+# ID: 001, Name: srv-web-01,   IP: 10.0.1.10, Active
+# ID: 002, Name: srv-erp-01,   IP: 10.0.2.10, Active
+# ID: 003, Name: dc-01,         IP: 10.0.3.10, Active
+
+# ─── Vérifier la réception de logs en temps réel ─────────────────────────────
+sudo tail -f /var/ossec/logs/alerts/alerts.log | head -20
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Question A1.1~:} Quelle est la différence entre un agent Wazuh
+en état \texttt{Active} et \texttt{Disconnected}~? Quels événements
+peuvent provoquer le passage d'un agent en état \texttt{Disconnected}~?
+
+\medskip\textbf{Question A1.2~:} Consultez le fichier
+\texttt{/var/ossec/etc/ossec.conf} sur le manager. Identifiez~:
+(a)~la fréquence de vérification FIM~; (b)~les répertoires surveillés
+sur les agents Linux~; (c)~le niveau minimal d'alerte transmis à Elasticsearch.
+\end{boxexo}
+
+\subsection{A2 — Navigation dans Kibana}
+
+Ouvrez Kibana dans un navigateur~: \texttt{http://10.0.0.5:5601}
+
+\begin{enumerate}
+  \item Naviguez vers \textbf{Security~→~Overview}.
+        Notez le nombre d'alertes des dernières 24~heures, le niveau
+        moyen de criticité, et les top~3 agents les plus actifs.
+  \item Ouvrez \textbf{Discover}. Sélectionnez l'index
+        \texttt{wazuh-alerts-*}. Filtrez sur les 12~dernières heures.
+  \item Identifiez le champ \texttt{rule.level} et filtrez pour afficher
+        uniquement les alertes de niveau~$\geq 8$.
+  \item Exportez les colonnes \texttt{@timestamp},
+        \texttt{agent.name}, \texttt{rule.id}, \texttt{rule.description},
+        \texttt{data.srcip} en CSV (bouton Share~→~CSV Export).
+\end{enumerate}
+
+\begin{boxexo}
+\textbf{Question A2.1~:} Combien d'alertes de niveau~$\geq 10$ ont été
+générées sur les 12~dernières heures~? Sur quel agent~? Quelle règle~?
+
+\medskip\textbf{Question A2.2~:} Wazuh utilise une échelle de niveaux
+de 0 à 15. À partir de quel niveau une alerte est-elle considérée
+comme haute~? Citez la documentation Wazuh correspondante.
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Partie~B — Configuration des sources et des agents}
+\label{lab1:partieB}
+% ==============================================================================
+
+\subsection{B1 — Activer la collecte Sysmon sur srv-web-01 (Windows)}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Déploiement et configuration Sysmon sur srv-web-01},
+  label={lst:lab1-sysmon}]
+# Sur srv-web-01 (session RDP ou PSExec depuis la salle TP)
+
+# Étape 1 : Vérifier que Sysmon est installé
+sc query Sysmon64
+# Si absent : installer (fichiers fournis sur le partage réseau TP)
+# \\10.0.0.1\TP-LAB1\Sysmon64.exe -accepteula -i sysmonconfig.xml
+
+# Étape 2 : Charger la configuration sysmonconfig.xml fournie
+# (configuration minimale du chapitre 2, adaptée LiZbiZ-SIS)
+Sysmon64.exe -c \\10.0.0.1\TP-LAB1\sysmonconfig-lab1.xml
+
+# Étape 3 : Vérifier que les événements Sysmon sont bien collectés
+# par l'agent Wazuh (vérifier ossec.conf sur l'agent)
+type "C:\Program Files (x86)\ossec-agent\ossec.conf" | findstr -i "sysmon"
+# Doit contenir : <location>Microsoft-Windows-Sysmon/Operational</location>
+
+# Étape 4 : Forcer l'envoi d'un événement test
+# Ouvrir PowerShell et exécuter une commande encodée (simulée)
+powershell -EncodedCommand ZQBjAGgAbwAgAHQAZQBzAHQA
+# (= "echo test" en base64 — génère un Sysmon EID 1)
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Question B1.1~:} Dans Kibana, confirmez que l'événement Sysmon
+EID~1 généré par la commande PowerShell est bien visible dans l'index
+Wazuh. Copiez l'entrée JSON complète dans votre rapport.
+
+\medskip\textbf{Question B1.2~:} Identifiez dans le JSON les champs~:
+\texttt{process.name}, \texttt{process.command\_line}, \texttt{process.hash.sha256},
+\texttt{process.parent.name}. Quelle valeur contient \texttt{rule.mitre.id}~?
+\end{boxexo}
+
+\subsection{B2 — Activer la collecte Apache sur srv-web-01 (Linux)}
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Configuration de la collecte des logs Apache via Wazuh Agent},
+  label={lst:lab1-apache}]
+# Sur srv-web-01 Linux (SSH)
+# Vérifier la configuration de l'agent Wazuh
+sudo cat /var/ossec/etc/ossec.conf | grep -A5 "localfile"
+
+# Ajouter la collecte Apache si absente
+sudo tee -a /var/ossec/etc/ossec.conf << 'EOF'
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/apache2/access.log</location>
+  </localfile>
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/apache2/error.log</location>
+  </localfile>
+EOF
+
+# Redémarrer l'agent
+sudo systemctl restart wazuh-agent
+
+# Générer du trafic test vers le serveur web
+curl -s http://10.0.1.10/ > /dev/null
+curl -s "http://10.0.1.10/?id=1 UNION SELECT 1,2,3--" > /dev/null
+curl -s "http://10.0.1.10/wp-login.php" -X POST \
+  -d "log=admin&pwd=test123" > /dev/null
+for i in $(seq 1 30); do
+  curl -s "http://10.0.1.10/$(cat /dev/urandom | tr -dc 'a-z' | \
+    head -c8).php" > /dev/null
+done
+# Les 30 dernières requêtes génèrent des 404 en masse
+
+# Vérifier dans Kibana que les alertes Apache apparaissent
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Question B2.1~:} Dans Kibana, filtrez les alertes provenant de
+srv-web-01 sur les 15~dernières minutes. Identifiez les règles Wazuh
+déclenchées. Quel est le Rule ID associé à la détection de SQLi~?
+
+\medskip\textbf{Question B2.2~:} La requête avec \texttt{UNION SELECT}
+a-t-elle déclenché une alerte de niveau~$\geq 8$~? Si non, expliquez
+pourquoi et proposez une modification de la configuration Wazuh pour
+améliorer cette détection.
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Partie~C — Rédaction et test de règles de corrélation}
+\label{lab1:partieC}
+% ==============================================================================
+
+\subsection{C1 — Règle de détection du brute force SSH}
+
+\begin{lstlisting}[style=StyleCode, language=YAML,
+  caption={Règle Wazuh à créer --- brute force SSH personnalisée},
+  label={lst:lab1-regle-ssh}]
+<!-- Fichier : /var/ossec/etc/rules/local_rules.xml -->
+<!-- À compléter et tester -->
+
+<group name="lab1_lizbiz,">
+
+  <!-- Règle 1 : Brute force SSH (5 échecs en 60s, même IP) -->
+  <rule id="100501" level="10" frequency="5" timeframe="60">
+    <if_matched_sid>5716</if_matched_sid>
+    <!-- TODO : ajouter le champ de corrélation par IP source -->
+    <!-- TODO : ajouter la description -->
+    <!-- TODO : ajouter le mapping MITRE T1110.001 -->
+    <!-- TODO : ajouter le groupe pci_dss_10.2.4 -->
+  </rule>
+
+  <!-- Règle 2 : Authentification SSH réussie après des échecs -->
+  <!-- (connexion réussie dont le même sid 5716 a été déclenché avant) -->
+  <rule id="100502" level="12">
+    <!-- TODO : définir la règle parent (brute force suivi de succès) -->
+    <!-- TODO : mapper MITRE T1078 (Valid Accounts) -->
+  </rule>
+
+</group>
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Travail~C1~:}
+\begin{enumerate}
+  \item Complétez les deux règles XML ci-dessus (remplacez tous
+        les \texttt{TODO}).
+  \item Chargez les règles~: \texttt{sudo /var/ossec/bin/wazuh-logtest -V}
+        pour valider la syntaxe.
+  \item Testez la règle~100501 en générant un brute force SSH depuis
+        la VM attaquante~: \\
+        \texttt{hydra -l root -P /usr/share/wordlists/rockyou.txt \\ ssh://10.0.1.10 -t 4 -f}
+  \item Confirmez l'alerte dans Kibana. Copiez le JSON de l'alerte.
+  \item Calculez le FPR de votre règle sur les 30~dernières minutes.
+\end{enumerate}
+\end{boxexo}
+
+\subsection{C2 — Règle de détection de mouvement latéral SMB}
+
+\begin{lstlisting}[style=StyleCode, language=YAML,
+  caption={Règle à créer --- mouvement latéral SMB (T1021.002)},
+  label={lst:lab1-regle-smb}]
+<!-- Mouvement latéral : connexion SMB réussie depuis un poste vers
+     plusieurs serveurs en moins de 5 minutes (T1021.002) -->
+<rule id="100510" level="11" frequency="3" timeframe="300">
+  <!-- TODO : identifier les Event IDs Windows pertinents (EID 4624) -->
+  <!-- TODO : filtrer sur LogonType 3 (réseau) -->
+  <!-- TODO : regrouper par compte source (not by IP) -->
+  <!-- TODO : exclure les comptes de service légitimes -->
+  <!-- TODO : mapper T1021.002 -->
+</rule>
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Travail~C2~:} Complétez, chargez et testez la règle~100510.
+Simulez un mouvement latéral depuis dc-01 vers srv-erp-01 et srv-web-01
+avec les credentials fournis. Documentez~: (a)~l'alerte générée~;
+(b)~le délai entre l'action et la détection (MTTD sur cet événement)~;
+(c)~une amélioration possible.
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Partie~D — Qualification d'alertes et tableau de bord}
+\label{lab1:partieD}
+% ==============================================================================
+
+\subsection{D1 — Qualification de 3~alertes}
+
+À partir des alertes générées dans les parties précédentes, qualifiez
+3~alertes selon le modèle suivant~:
+
+\begin{table}[H]
+\centering\small
+\caption{Modèle de qualification d'alerte — à remplir pour chaque alerte}
+\label{tab:lab1-qualification}
+\begin{tabular}{p{4cm}p{9.5cm}}
+\toprule
+\textbf{Champ} & \textbf{Valeur} \\
+\midrule
+Identifiant alerte & \textit{(ID ticket)} \\
+Timestamp (UTC) & \textit{(copier depuis le JSON)} \\
+Agent source & \textit{(nom de l'agent Wazuh)} \\
+Rule ID / Description & \textit{(ID + texte)} \\
+IP source & \textit{(si disponible)} \\
+Utilisateur & \textit{(si disponible)} \\
+Niveau / Gravité & \textit{(niveau Wazuh + gravité IR)} \\
+TTP MITRE ATT\&CK & \textit{(tactique + technique)} \\
+Verdict & ☐ Vrai positif \quad ☐ Faux positif \quad ☐ À analyser \\
+Justification du verdict & \textit{(2--3 phrases)} \\
+Action recommandée & \textit{(confinement / surveillance / fermeture)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{D2 — Construction du tableau de bord SOC}
+
+Dans Kibana~→~Dashboard~→~Create new dashboard, créez un tableau de
+bord \texttt{SOC-LiZbiZ-SIS} comprenant les visualisations suivantes~:
+
+\begin{enumerate}
+  \item \textbf{Compteur~:} nombre total d'alertes de niveau $\geq 8$
+        sur les dernières 24~heures.
+  \item \textbf{Camembert~:} répartition des alertes par niveau
+        (6~à~15).
+  \item \textbf{Histogramme temporel~:} volume d'alertes par heure sur
+        48~heures (pour détecter les pics d'activité).
+  \item \textbf{Table Top~10~:} top~10 des adresses IP sources
+        d'alertes, avec nombre d'alertes et niveau maximum.
+  \item \textbf{Carte géographique~:} géolocalisation des IPs sources
+        (si GeoIP configuré dans Logstash).
+\end{enumerate}
+
+\begin{boxexo}
+\textbf{Question D2.1~:} À partir de votre tableau de bord, identifiez
+l'heure à laquelle l'activité malveillante a débuté lors du TP.
+Quelle visualisation vous a permis de la détecter le plus rapidement~?
+
+\medskip\textbf{Question D2.2~:} Proposez une 6\textsuperscript{e}
+visualisation qui aurait une valeur opérationnelle pour l'analyste N1
+de LiZbiZ-SIS. Justifiez en 3~phrases.
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Partie~E — Chasse aux menaces (Threat Hunting)}
+\label{lab1:partieE}
+% ==============================================================================
+
+\subsection{E1 — Hypothèse et investigation}
+
+\textbf{Hypothèse~:} Des outils de reconnaissance Active Directory
+ont été exécutés sur le réseau LiZbiZ-SIS (T1087, T1069, T1018).
+
+\begin{lstlisting}[style=StyleTerminal,
+  caption={Requêtes KQL de threat hunting --- recon AD},
+  label={lst:lab1-hunting}]
+# ─── Recherche 1 : exécutions de net.exe / net1.exe (recon AD) ───────────────
+event.code: "1"
+  AND (process.name: "net.exe" OR process.name: "net1.exe")
+  AND process.command_line: (*"user" OR *"group" OR *"localgroup" OR *"view*)
+
+# ─── Recherche 2 : requêtes LDAP depuis des postes non-serveurs ───────────────
+event.code: "3"
+  AND destination.port: 389
+  AND NOT source.ip: "10.0.3.10"  # exclure DC-01 lui-même
+
+# ─── Recherche 3 : PowerShell avec imports de modules AD suspects ─────────────
+event.code: "4104"
+  AND winlog.event_data.ScriptBlockText: (
+    *"Get-ADUser" OR *"Get-ADGroup" OR *"Get-ADDomain" OR
+    *"net user" OR *"BloodHound" OR *"SharpHound"
+  )
+
+# ─── Recherche 4 : Enum des partages réseau depuis un poste ──────────────────
+event.code: "5140"  # Accès à un partage réseau
+  AND NOT winlog.event_data.SubjectUserName: (*"$" OR *"SYSTEM")
+\end{lstlisting}
+
+\begin{boxexo}
+\textbf{Travail~E1~:}
+\begin{enumerate}
+  \item Exécutez les 4~requêtes dans Kibana. Pour chacune~:
+        notez le nombre de résultats et identifiez les événements
+        les plus suspects.
+  \item La 3\textsuperscript{e} requête a-t-elle des résultats~?
+        Si oui, ouvrez l'entrée la plus récente et documentez~:
+        IP machine, utilisateur, contenu du ScriptBlock.
+  \item Sur la base de vos résultats, formulez une conclusion~:
+        l'hypothèse initiale est-elle confirmée~? Quel TTP
+        MITRE correspond~?
+  \item Transformez la recherche la plus pertinente en règle Wazuh
+        de niveau~10. Rédigez le XML complet.
+\end{enumerate}
+\end{boxexo}
+
+
+% ==============================================================================
+\section{Livrable et critères d'évaluation}
+\label{lab1:livrable}
+% ==============================================================================
+
+\textbf{Rapport à remettre dans les 48~heures} (format PDF, 15~pages
+maximum) comprenant~:
+
+\begin{enumerate}
+  \item \textbf{Introduction~:} description de l'infrastructure et de
+        l'état initial du SIEM.
+  \item \textbf{Configuration~:} fichiers de configuration Wazuh
+        et règles complètes (XML), avec captures d'écran de validation.
+  \item \textbf{Qualifications d'alertes~:} 3~fiches remplies selon
+        le tableau~\ref{tab:lab1-qualification}.
+  \item \textbf{Tableau de bord~:} capture d'écran commentée avec
+        justification de chaque visualisation.
+  \item \textbf{Threat Hunting~:} résultats des 4~requêtes, conclusion,
+        règle créée.
+  \item \textbf{Conclusion~:} 3~recommandations d'amélioration pour le
+        SOC de LiZbiZ-SIS, métriques calculées (MTTD observé, FPR
+        estimé des règles rédigées).
+\end{enumerate}
+
+\begin{table}[H]
+\centering\small
+\caption{Barème Lab~1}
+\label{tab:lab1-bareme}
+\rowcolors{2}{TableauPair}{TableauImpair}
+\begin{tabular}{p{6cm}p{8cm}p{1.5cm}}
+\toprule
+\tableauHeader{Critère} & \tableauHeader{Indicateurs} &
+\tableauHeader{Points} \\
+\midrule
+Configuration SIEM opérationnelle & Agents connectés, sources actives & 2 \\
+Règles Wazuh correctes & Syntaxe XML valide, mapping MITRE, test positif & 3 \\
+Qualification des alertes & Verdict justifié, TTP correct, action cohérente & 2 \\
+Tableau de bord & 5~visualisations présentes, commentées & 2 \\
+Threat Hunting & Requêtes exécutées, résultats documentés, règle créée & 1 \\
+\bottomrule
+\multicolumn{2}{r}{\textbf{Total}} & \textbf{10} \\
+\end{tabular}
+\end{table}
